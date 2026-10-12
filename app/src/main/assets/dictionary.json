@@ -1,0 +1,16 @@
+{
+  "general": [
+    { "key": "domain", "value": "Romanian Orthodox Christian sermon" },
+    { "key": "topic", "value": "Spiritual life, often explained through farming metaphors" },
+    { "key": "setting", "value": "A priest speaking to a congregation, recorded from across the room" }
+  ],
+  "text": "",
+  "terms": ["țarina", "ogorul", "roabă", "târnăcop", "mărăcini", "duhovnicește", "mântuirea"],
+  "translation_terms": [
+    { "source": "țarina", "target": "field" },
+    { "source": "roabă", "target": "wheelbarrow" },
+    { "source": "târnăcop", "target": "pickaxe" },
+    { "source": "mărăcini", "target": "thorns" },
+    { "source": "omenește", "target": "human" }
+  ]
+}
