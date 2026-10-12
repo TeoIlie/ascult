@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -22,17 +24,24 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.audio.SILENCE_DBFS
+import com.teoilie.ascult.soniox.Transcript
 import kotlin.math.roundToInt
 
 @Composable
@@ -64,18 +73,40 @@ private fun TranslationContent(state: UiState, onStart: () -> Unit, onStop: () -
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Pane(label = "Română", text = "Transcrierea va apărea aici.")
+            Pane(label = "Română", transcript = state.romanian, placeholder = "Transcrierea va apărea aici.")
             HorizontalDivider()
-            Pane(label = "English", text = "The translation will appear here.")
+            Pane(label = "English", transcript = state.english, placeholder = "The translation will appear here.")
         }
     }
 }
 
+/** Final text in full colour, provisional text dimmed; follows the end of the text as it grows. */
 @Composable
-private fun ColumnScope.Pane(label: String, text: String) {
+private fun ColumnScope.Pane(label: String, transcript: Transcript, placeholder: String) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(scroll) {
+        snapshotFlow { scroll.maxValue }.collect { scroll.animateScrollTo(it) }
+    }
+    val dimmed = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+    val text = if (transcript.isEmpty()) {
+        AnnotatedString(placeholder, SpanStyle(color = dimmed))
+    } else {
+        val final = transcript.final.trimStart()
+        buildAnnotatedString {
+            append(final)
+            withStyle(SpanStyle(color = dimmed)) {
+                append(if (final.isEmpty()) transcript.provisional.trimStart() else transcript.provisional)
+            }
+        }
+    }
+
     Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        Text(text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 8.dp).verticalScroll(scroll),
+        )
     }
 }
 
@@ -91,8 +122,11 @@ private fun ControlBar(state: UiState, onStart: () -> Unit, onStop: () -> Unit) 
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LevelMeter(state.levelDb, modifier = Modifier.weight(1f))
-                if (state.listening) Button(onClick = onStop) { Text("Stop") }
-                else Button(onClick = onStart) { Text("Start") }
+                when {
+                    state.stopping -> Button(onClick = {}, enabled = false) { Text("Stopping…") }
+                    state.listening -> Button(onClick = onStop) { Text("Stop") }
+                    else -> Button(onClick = onStart) { Text("Start") }
+                }
             }
         }
     }
@@ -116,5 +150,11 @@ private fun LevelMeter(levelDb: Float, modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 private fun TranslationContentPreview() {
-    MaterialTheme { TranslationContent(UiState(listening = true, levelDb = -24f), onStart = {}, onStop = {}) }
+    val state = UiState(
+        listening = true,
+        levelDb = -24f,
+        romanian = Transcript("Fiindcă a cădea e omenește.", " Problema este"),
+        english = Transcript("Because to fall is human.", " The problem is"),
+    )
+    MaterialTheme { TranslationContent(state, onStart = {}, onStop = {}) }
 }

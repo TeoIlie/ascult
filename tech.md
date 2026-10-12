@@ -60,7 +60,9 @@ The default ships as a bundled asset (`app/src/main/assets/dictionary.json`), ve
 
 ## API key
 
-Entered on a settings screen and stored in DataStore; never committed. Key retrieval sits behind one small interface (`ApiKeyProvider`) so a future public version could swap to Soniox temporary keys minted by a backend, or bring-your-own-key.
+Until the settings screen exists (step 7), debug builds read `SONIOX_API_KEY` from the gitignored `.env` at the repo root (the same file `tools/stream_test.py` uses) into `BuildConfig`; release builds get an empty key.
+
+Eventually entered on a settings screen and stored in DataStore; never committed. Key retrieval sits behind one small interface (`ApiKeyProvider`) so a future public version could swap to Soniox temporary keys minted by a backend, or bring-your-own-key.
 
 ## Build steps
 
@@ -76,5 +78,5 @@ Each step ends with something runnable.
 
 ## GrapheneOS notes
 
-- The per-app **Network** permission must be enabled or the WebSocket fails silently.
+- The per-app **Network** permission must be enabled (Settings → Apps → Ascult → Permissions). New apps may install with it denied; the app then shows `Unable to resolve host "stt-rt.soniox.com"`.
 - Microphone access may also be gated by the global mic toggle.
