@@ -3,7 +3,6 @@ package com.teoilie.ascult.audio
 import android.Manifest
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.media.MediaRecorder
 import androidx.annotation.RequiresPermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -13,6 +12,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlin.math.log10
 import kotlin.math.max
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 const val SAMPLE_RATE = 16_000
@@ -23,7 +24,7 @@ const val FRAME_SAMPLES = SAMPLE_RATE * FRAME_MS / 1000
 const val SILENCE_DBFS = -80f
 
 /** Microphone capture as a flow of 100 ms frames of 16 kHz mono PCM16, the format sent to Soniox. */
-class AudioCapture(private val source: Int = MediaRecorder.AudioSource.VOICE_RECOGNITION) {
+class AudioCapture(private val source: Int) {
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun frames(): Flow<ShortArray> = flow {
@@ -65,4 +66,13 @@ fun ShortArray.levelDbfs(): Float {
     for (sample in this) sum += sample.toDouble() * sample
     val rms = sqrt(sum / size) / Short.MAX_VALUE
     return if (rms <= 0.0) SILENCE_DBFS else max(SILENCE_DBFS, (20 * log10(rms)).toFloat())
+}
+
+/** Software gain with clipping. Raises quiet input to a usable level; it does not improve signal-to-noise. */
+fun ShortArray.withGain(gainDb: Int): ShortArray {
+    if (gainDb == 0) return this
+    val factor = 10.0.pow(gainDb / 20.0)
+    return ShortArray(size) { i ->
+        (this[i] * factor).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+    }
 }

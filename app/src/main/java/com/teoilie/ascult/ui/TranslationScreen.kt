@@ -23,9 +23,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +52,8 @@ import kotlin.math.roundToInt
 @Composable
 fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val audioSettings by viewModel.audioSettings.collectAsStateWithLifecycle()
+    var showAudioSettings by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         viewModel.start() // reports the error itself if the microphone was denied
@@ -63,14 +69,29 @@ fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
             if (missing.isEmpty()) viewModel.start() else permissionLauncher.launch(missing.toTypedArray())
         },
         onStop = viewModel::stop,
+        onAudioSettings = { showAudioSettings = true },
     )
+
+    if (showAudioSettings) {
+        AudioSettingsSheet(
+            settings = audioSettings,
+            listening = state.listening,
+            onChange = viewModel::updateAudio,
+            onDismiss = { showAudioSettings = false },
+        )
+    }
 }
 
 /** Two panes: Romanian transcript on top, English translation below; controls at the bottom. */
 @Composable
-private fun TranslationContent(state: SessionState, onStart: () -> Unit, onStop: () -> Unit) {
+private fun TranslationContent(
+    state: SessionState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onAudioSettings: () -> Unit,
+) {
     Scaffold(
-        bottomBar = { ControlBar(state, onStart, onStop) },
+        bottomBar = { ControlBar(state, onStart, onStop, onAudioSettings) },
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -114,7 +135,7 @@ private fun ColumnScope.Pane(label: String, transcript: Transcript, placeholder:
 }
 
 @Composable
-private fun ControlBar(state: SessionState, onStart: () -> Unit, onStop: () -> Unit) {
+private fun ControlBar(state: SessionState, onStart: () -> Unit, onStop: () -> Unit, onAudioSettings: () -> Unit) {
     Surface(tonalElevation = 3.dp) {
         Column(
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
@@ -123,8 +144,16 @@ private fun ControlBar(state: SessionState, onStart: () -> Unit, onStop: () -> U
             state.error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
+            state.recording?.let {
+                Text(
+                    "${if (state.listening) "Recording to" else "Saved"} ${it.name}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LevelMeter(state.levelDb, modifier = Modifier.weight(1f))
+                TextButton(onClick = onAudioSettings) { Text("Audio") }
                 when {
                     state.stopping -> Button(onClick = {}, enabled = false) { Text("Stopping…") }
                     state.listening -> Button(onClick = onStop) { Text("Stop") }
@@ -159,5 +188,5 @@ private fun TranslationContentPreview() {
         romanian = Transcript("Fiindcă a cădea e omenește.", " Problema este"),
         english = Transcript("Because to fall is human.", " The problem is"),
     )
-    MaterialTheme { TranslationContent(state, onStart = {}, onStop = {}) }
+    MaterialTheme { TranslationContent(state, onStart = {}, onStop = {}, onAudioSettings = {}) }
 }

@@ -58,6 +58,21 @@ The speaker uses uncommon words, so the session config carries a default diction
 
 The default ships as a bundled asset (`app/src/main/assets/dictionary.json`), version-controlled, and is loaded on every session. Later, it can be editable in-app with overrides stored in DataStore.
 
+## Audio tuning
+
+The **Audio** button opens a sheet with three settings, stored in DataStore:
+
+- **Microphone source**: `VOICE_RECOGNITION` (default), `UNPROCESSED`, `MIC`, `CAMCORDER`. Each applies different device processing; the best one for a distant speaker has to be found by ear and by transcript quality.
+- **Gain**: 0 to +24 dB software gain with clipping, applied live. It raises quiet input but does not improve signal-to-noise.
+- **Save recording**: writes exactly what is sent to Soniox (after gain) as a 16 kHz mono WAV named `<time>_<SOURCE>_+<gain>dB.wav`.
+
+Recordings land in the app's external files directory. To compare them on the desktop:
+
+```bash
+adb pull /sdcard/Android/data/com.teoilie.ascult/files/recordings/ recordings/
+tools/.venv/bin/python tools/stream_test.py recordings/<file>.wav --speed 0
+```
+
 ## API key
 
 Until the settings screen exists (step 7), debug builds read `SONIOX_API_KEY` from the gitignored `.env` at the repo root (the same file `tools/stream_test.py` uses) into `BuildConfig`; release builds get an empty key.

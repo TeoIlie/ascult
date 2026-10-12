@@ -8,6 +8,10 @@ import com.teoilie.ascult.BuildConfig
 import com.teoilie.ascult.audio.AudioCapture
 import com.teoilie.ascult.audio.SILENCE_DBFS
 import com.teoilie.ascult.audio.levelDbfs
+import com.teoilie.ascult.audio.recordTo
+import com.teoilie.ascult.audio.withGain
+import com.teoilie.ascult.settings.AudioSettings
+import com.teoilie.ascult.settings.SettingsStore
 import com.teoilie.ascult.soniox.SonioxClient
 import com.teoilie.ascult.soniox.Transcript
 import com.teoilie.ascult.soniox.loadDictionary
@@ -17,15 +21,23 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** How long to wait for Soniox to finalise the last tokens after Stop before giving up. */
 private const val FINISH_TIMEOUT_MS = 5_000L
@@ -37,16 +49,18 @@ data class SessionState(
     val romanian: Transcript = Transcript(),
     val english: Transcript = Transcript(),
     val error: String? = null,
+    /** WAV file of the last session's audio, if recording was on. */
+    val recording: File? = null,
 )
 
 /**
  * Microphone → Soniox → transcripts. Lives for the whole process so it survives the screen going
  * away; TranslationService keeps the process and microphone alive while [SessionState.listening].
  */
-class TranslationSession(private val context: Context) {
+class TranslationSession(private val context: Context, settings: SettingsStore) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val capture = AudioCapture()
     private val soniox = SonioxClient()
+    private val audioSettings = settings.audio.stateIn(scope, SharingStarted.Eagerly, AudioSettings())
     private val stopRequested = MutableStateFlow(false)
     private var sessionJob: Job? = null
 
@@ -67,11 +81,17 @@ class TranslationSession(private val context: Context) {
             return false
         }
 
+        // Source and recording are fixed for the session; gain is read per frame so it can be adjusted live.
+        val settings = audioSettings.value
+        val recording = if (settings.saveRecording) recordingFile(settings) else null
         stopRequested.value = false
-        _state.value = SessionState(listening = true)
+        _state.value = SessionState(listening = true, recording = recording)
         sessionJob = scope.launch {
             val dictionary = withContext(Dispatchers.IO) { loadDictionary(context) }
-            val audio = capture.frames()
+            val audio = AudioCapture(settings.source.audioSource).frames()
+                .map { it.withGain(audioSettings.value.gainDb) }
+                .let { frames -> if (recording != null) frames.recordTo(recording) else frames }
+                .flowOn(Dispatchers.IO)
                 .takeWhile { !stopRequested.value }
                 .onEach { frame -> _state.update { it.copy(levelDb = frame.levelDbfs()) } }
 
@@ -88,6 +108,13 @@ class TranslationSession(private val context: Context) {
                 }
         }
         return true
+    }
+
+    /** e.g. recordings/20261012-191500_UNPROCESSED_+12dB.wav in the app's external files directory. */
+    private fun recordingFile(settings: AudioSettings): File {
+        val dir = File(context.getExternalFilesDir(null), "recordings").apply { mkdirs() }
+        val time = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        return File(dir, "${time}_${settings.source.name}_+${settings.gainDb}dB.wav")
     }
 
     /** Stops the microphone, then lets Soniox finalise the remaining text before the session closes. */
