@@ -5,18 +5,21 @@
 A single-screen Android app with no backend. Microphone audio is streamed to the Soniox real-time WebSocket API, which returns the Romanian transcript and its English translation as a token stream. Both are shown live on screen.
 
 ```text
-Mic ──► AudioRecord (16 kHz mono PCM16) ──► OkHttp WebSocket ──► Soniox stt-rt
-                                                                   │
-Compose UI ◄── ViewModel (StateFlow) ◄── token stream (Romanian + English,
-                                          final + provisional)
+Mic ──► AudioCapture (16 kHz mono PCM16) ──► TranslationSession ──► SonioxClient (WebSocket) ──► Soniox stt-rt
+                                                  │  ▲                                                  │
+                                                  │  └──────── tokens (Romanian + English, final + provisional)
+                                                  ▼
+                       SessionState (phase, level, segments) ──► ViewModels ──► Compose UI (SyncedPanes)
 ```
+
+`TranslationService` (a microphone foreground service) only keeps the process alive while the session listens; the session itself lives in `AscultApp`.
 
 ## Components
 
 | Concern | Choice | Notes |
 | --- | --- | --- |
 | UI | Jetpack Compose, single Activity | Two panes: Romanian (top), English (bottom). Provisional text dimmed. |
-| State | `ViewModel` + `StateFlow`, coroutines | UI observes state; service owns the session. |
+| State | Process-wide `TranslationSession` + `StateFlow`, coroutines | ViewModels expose it to the UI; the foreground service keeps it alive. |
 | Audio | `AudioRecord`, 16 kHz, mono, `pcm_s16le` | Selectable audio source, software gain, level meter. |
 | Network | OkHttp `WebSocket` | No Soniox Android SDK; the protocol is small. |
 | Background | Foreground service, type `microphone` | Keeps listening with the screen off. Must be started while the app is visible (Android 14+). |
@@ -76,9 +79,9 @@ tools/.venv/bin/python tools/stream_test.py recordings/<file>.wav --speed 0
 ## Sessions, reconnection and transcripts
 
 - While listening with the app visible, the screen is kept from timing out (the power button still turns it off; listening continues). A− / A+ scale both panes' text, stored in DataStore.
-
+- `SessionState.phase` is one of IDLE, LISTENING, RECONNECTING (still capturing into the buffer) or STOPPING (microphone off, waiting for Soniox to finalise). Reconnecting is shown as a neutral status; `error` is only for real failures.
 - Each Start appends a segment labelled with its source, gain and start time; text is kept across Stop/Start until Clear.
-- Captured audio goes into a 30 s buffer that outlives individual WebSocket connections. If the connection drops (network error, or Soniox timeout/rate-limit/server error), the app reconnects with backoff (1, 2, 4, 8, then 10 s) and sends the buffered audio, so only that connection's provisional text is lost. Other Soniox errors (e.g. invalid key) end the session.
+- Captured audio goes into a 30 s buffer that outlives individual WebSocket connections. If the connection drops (network error, a missed WebSocket pong (pings every 10 s catch silently stalled networks), or a Soniox timeout/rate-limit/server error), the app reconnects with backoff (1, 2, 4, 8, then 10 s) and sends the buffered audio, so only that connection's provisional text is lost. Other Soniox errors (e.g. invalid key) end the session.
 - Share sends the transcript as plain text. Each conversation (since the last Clear) is also saved every 15 s while listening and when a session ends, to `/sdcard/Android/data/com.teoilie.ascult/files/transcripts/<start time>.txt`.
 
 ## API key
@@ -87,17 +90,30 @@ Entered in Settings and stored in DataStore (app-private, unencrypted; backups d
 
 A public version would replace this with Soniox temporary keys minted by a small backend; the key is read in one place (`TranslationSession.start`).
 
-## Build steps
+## Code map
 
-Each step ends with something runnable.
+Kotlin sources live in `app/src/main/java/com/teoilie/ascult/`.
 
-1. **Desktop validation.** A Python script (`tools/stream_test.py`) streams the Romanian recording to Soniox with the same config and dictionary the app will use, printing Romanian and English. Confirms the key, protocol, and dictionary effect before any Android work.
-2. **Project skeleton.** Android Studio "Empty Activity" (Compose), minSdk 31+, running on the Pixel over USB debugging. Buildable from CLI with `./gradlew installDebug`.
-3. **Microphone + level meter.** `RECORD_AUDIO` runtime permission, `AudioRecord` capture loop, live level bar.
-4. **Streaming.** WebSocket client, config message with dictionary, audio upload, token parsing, two-pane Romanian/English display with dimmed provisional text. First useful milestone.
-5. **Foreground service.** Move capture and streaming into a microphone foreground service with a notification and stop action; screen-off listening.
-6. **Audio tuning.** Audio source picker (`UNPROCESSED`, `VOICE_RECOGNITION`, `MIC`, ...), software gain, optional WAV recording of sessions for comparison and replay through the step-1 script.
-7. **Polish.** Settings screen (API key, in-app dictionary editing), reconnect on network drop, transcript share and auto-save.
+| Path | Responsibility |
+| --- | --- |
+| `AscultApp.kt` | Application; holds the shared `SettingsStore` and `TranslationSession` (`context.app.…`). |
+| `MainActivity.kt` | Single activity; switches between the translation and settings screens. |
+| `audio/AudioCapture.kt` | `AudioRecord` → flow of 100 ms PCM16 frames; level (dBFS) and gain maths. |
+| `audio/WavWriter.kt` | WAV file writer; `recordTo` tees frames into a recording. |
+| `soniox/SonioxClient.kt` | WebSocket protocol: config message, audio frames, token parsing, errors. Mirrored by `tools/stream_test.py`. |
+| `soniox/Transcript.kt` | `Transcript` (final + provisional text), `Segment` (one Start→Stop run), pure update helpers, plain-text export. |
+| `soniox/Dictionary.kt` | Soniox `context` model; loads the bundled `assets/dictionary.json`. |
+| `session/TranslationSession.kt` | Session lifecycle: start checks, capture → buffer → (re)connect loop, autosave, stop, clear. |
+| `session/SessionFiles.kt` | Recording and transcript files in external storage; serialised saving. |
+| `session/TranslationService.kt` | Microphone foreground service, notification with Stop, wake lock. |
+| `settings/SettingsStore.kt` | DataStore: audio source/gain/recording, text size, API key, dictionary override. |
+| `ui/TranslationScreen.kt` | Main screen: top bar (text size, Share, Settings), panes, control bar (level, Start/Stop, Clear, audio settings). |
+| `ui/SyncedPanes.kt` | Romanian/English panes with live follow and segment-aligned scroll sync. |
+| `ui/AudioSettingsSheet.kt` | Bottom sheet for source, gain and recording. |
+| `ui/SettingsScreen.kt`, `ui/SettingsViewModel.kt` | API key and dictionary editor (one entry per line ↔ `Dictionary`). |
+| `ui/TranslationViewModel.kt`, `ui/Theme.kt` | Main screen state/actions; Material You theme. |
+| `app/src/main/assets/dictionary.json` | Default dictionary, shared by the app and `tools/stream_test.py`. |
+| `tools/stream_test.py` | Desktop check: streams an audio file to Soniox with the app's config and prints both languages. |
 
 ## GrapheneOS notes
 
