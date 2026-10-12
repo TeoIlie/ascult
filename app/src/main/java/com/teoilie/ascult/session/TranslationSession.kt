@@ -12,8 +12,8 @@ import com.teoilie.ascult.audio.recordTo
 import com.teoilie.ascult.audio.withGain
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.SettingsStore
+import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.SonioxClient
-import com.teoilie.ascult.soniox.Transcript
 import com.teoilie.ascult.soniox.loadDictionary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +46,8 @@ data class SessionState(
     val listening: Boolean = false,
     val stopping: Boolean = false,
     val levelDb: Float = SILENCE_DBFS,
-    val romanian: Transcript = Transcript(),
-    val english: Transcript = Transcript(),
+    /** Runs since the last Clear; the last one is the current (or most recent) session. */
+    val segments: List<Segment> = emptyList(),
     val error: String? = null,
     /** WAV file of the last session's audio, if recording was on. */
     val recording: File? = null,
@@ -84,8 +84,9 @@ class TranslationSession(private val context: Context, settings: SettingsStore) 
         // Source and recording are fixed for the session; gain is read per frame so it can be adjusted live.
         val settings = audioSettings.value
         val recording = if (settings.saveRecording) recordingFile(settings) else null
+        val label = "${settings.source.label} · +${settings.gainDb} dB · ${SimpleDateFormat("HH:mm", Locale.US).format(Date())}"
         stopRequested.value = false
-        _state.value = SessionState(listening = true, recording = recording)
+        _state.update { SessionState(listening = true, recording = recording, segments = it.segments + Segment(label)) }
         sessionJob = scope.launch {
             val dictionary = withContext(Dispatchers.IO) { loadDictionary(context) }
             val audio = AudioCapture(settings.source.audioSource).frames()
@@ -100,14 +101,22 @@ class TranslationSession(private val context: Context, settings: SettingsStore) 
                 .onCompletion { _state.update { it.copy(listening = false, stopping = false, levelDb = SILENCE_DBFS) } }
                 .collect { tokens ->
                     _state.update {
-                        it.copy(
-                            romanian = it.romanian.update(tokens.filterNot { t -> t.isTranslation }),
-                            english = it.english.update(tokens.filter { t -> t.isTranslation }),
+                        val current = it.segments.last()
+                        val updated = current.copy(
+                            romanian = current.romanian.update(tokens.filterNot { t -> t.isTranslation }),
+                            english = current.english.update(tokens.filter { t -> t.isTranslation }),
                         )
+                        it.copy(segments = it.segments.dropLast(1) + updated)
                     }
                 }
         }
         return true
+    }
+
+    /** Forgets all text; only between sessions. */
+    fun clear() {
+        if (sessionJob?.isActive == true) return
+        _state.value = SessionState()
     }
 
     /** e.g. recordings/20261012-191500_UNPROCESSED_+12dB.wav in the app's external files directory. */

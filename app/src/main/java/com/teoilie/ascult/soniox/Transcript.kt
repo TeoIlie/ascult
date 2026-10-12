@@ -9,9 +9,10 @@ data class Transcript(val final: String = "", val provisional: String = "") {
         final = final + tokens.filter { it.isFinal }.joinToString("") { it.text },
         provisional = tokens.filterNot { it.isFinal }.joinToString("") { it.text },
     )
-
-    fun isEmpty() = final.isEmpty() && provisional.isEmpty()
 }
+
+/** The text of one Start→Stop run, labelled with the audio settings it used. */
+data class Segment(val label: String, val romanian: Transcript = Transcript(), val english: Transcript = Transcript())
 
 /** The default dictionary (Soniox `context`), shared with tools/stream_test.py. */
 fun loadDictionary(context: Context): JSONObject =

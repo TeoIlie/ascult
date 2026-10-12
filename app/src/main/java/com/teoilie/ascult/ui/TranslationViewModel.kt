@@ -29,6 +29,8 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
     fun stop() = session.stop()
 
+    fun clear() = session.clear()
+
     fun updateAudio(transform: (AudioSettings) -> AudioSettings) {
         viewModelScope.launch { settings.updateAudio(transform) }
     }

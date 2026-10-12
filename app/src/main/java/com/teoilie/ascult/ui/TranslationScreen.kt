@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -46,6 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.audio.SILENCE_DBFS
 import com.teoilie.ascult.session.SessionState
+import com.teoilie.ascult.settings.AudioSettings
+import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.Transcript
 import kotlin.math.roundToInt
 
@@ -61,6 +64,7 @@ fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
 
     TranslationContent(
         state = state,
+        audioSettings = audioSettings,
         onStart = {
             // The microphone is required; notifications only make the session's Stop button visible.
             val missing = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS).filter {
@@ -69,6 +73,7 @@ fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
             if (missing.isEmpty()) viewModel.start() else permissionLauncher.launch(missing.toTypedArray())
         },
         onStop = viewModel::stop,
+        onClear = viewModel::clear,
         onAudioSettings = { showAudioSettings = true },
     )
 
@@ -86,40 +91,57 @@ fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
 @Composable
 private fun TranslationContent(
     state: SessionState,
+    audioSettings: AudioSettings,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onClear: () -> Unit,
     onAudioSettings: () -> Unit,
 ) {
     Scaffold(
-        bottomBar = { ControlBar(state, onStart, onStop, onAudioSettings) },
+        bottomBar = { ControlBar(state, audioSettings, onStart, onStop, onClear, onAudioSettings) },
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Pane(label = "Română", transcript = state.romanian, placeholder = "Transcrierea va apărea aici.")
+            Pane("Română", state.segments, Segment::romanian, placeholder = "Transcrierea va apărea aici.")
             HorizontalDivider()
-            Pane(label = "English", transcript = state.english, placeholder = "The translation will appear here.")
+            Pane("English", state.segments, Segment::english, placeholder = "The translation will appear here.")
         }
     }
 }
 
-/** Final text in full colour, provisional text dimmed; follows the end of the text as it grows. */
+/**
+ * Each segment under its settings label; final text in full colour, provisional text dimmed.
+ * Follows the end of the text as it grows.
+ */
 @Composable
-private fun ColumnScope.Pane(label: String, transcript: Transcript, placeholder: String) {
+private fun ColumnScope.Pane(
+    label: String,
+    segments: List<Segment>,
+    transcriptOf: (Segment) -> Transcript,
+    placeholder: String,
+) {
     val scroll = rememberScrollState()
     LaunchedEffect(scroll) {
         snapshotFlow { scroll.maxValue }.collect { scroll.animateScrollTo(it) }
     }
     val dimmed = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-    val text = if (transcript.isEmpty()) {
+    val segmentLabel = SpanStyle(color = MaterialTheme.colorScheme.primary, fontSize = MaterialTheme.typography.labelSmall.fontSize)
+    val text = if (segments.isEmpty()) {
         AnnotatedString(placeholder, SpanStyle(color = dimmed))
     } else {
-        val final = transcript.final.trimStart()
         buildAnnotatedString {
-            append(final)
-            withStyle(SpanStyle(color = dimmed)) {
-                append(if (final.isEmpty()) transcript.provisional.trimStart() else transcript.provisional)
+            segments.forEachIndexed { i, segment ->
+                if (i > 0) append("\n\n")
+                withStyle(segmentLabel) { append(segment.label) }
+                append("\n")
+                val transcript = transcriptOf(segment)
+                val final = transcript.final.trimStart()
+                append(final)
+                withStyle(SpanStyle(color = dimmed)) {
+                    append(if (final.isEmpty()) transcript.provisional.trimStart() else transcript.provisional)
+                }
             }
         }
     }
@@ -135,7 +157,14 @@ private fun ColumnScope.Pane(label: String, transcript: Transcript, placeholder:
 }
 
 @Composable
-private fun ControlBar(state: SessionState, onStart: () -> Unit, onStop: () -> Unit, onAudioSettings: () -> Unit) {
+private fun ControlBar(
+    state: SessionState,
+    audioSettings: AudioSettings,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onClear: () -> Unit,
+    onAudioSettings: () -> Unit,
+) {
     Surface(tonalElevation = 3.dp) {
         Column(
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
@@ -151,9 +180,18 @@ private fun ControlBar(state: SessionState, onStart: () -> Unit, onStop: () -> U
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // The current audio settings double as the button that opens them.
+                TextButton(onClick = onAudioSettings) {
+                    Text("${audioSettings.source.label} · +${audioSettings.gainDb} dB")
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onClear, enabled = !state.listening && state.segments.isNotEmpty()) {
+                    Text("Clear")
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LevelMeter(state.levelDb, modifier = Modifier.weight(1f))
-                TextButton(onClick = onAudioSettings) { Text("Audio") }
                 when {
                     state.stopping -> Button(onClick = {}, enabled = false) { Text("Stopping…") }
                     state.listening -> Button(onClick = onStop) { Text("Stop") }
@@ -185,8 +223,15 @@ private fun TranslationContentPreview() {
     val state = SessionState(
         listening = true,
         levelDb = -24f,
-        romanian = Transcript("Fiindcă a cădea e omenește.", " Problema este"),
-        english = Transcript("Because to fall is human.", " The problem is"),
+        segments = listOf(
+            Segment(
+                label = "Voice recognition · +0 dB · 19:42",
+                romanian = Transcript("Fiindcă a cădea e omenește.", " Problema este"),
+                english = Transcript("Because to fall is human.", " The problem is"),
+            ),
+        ),
     )
-    MaterialTheme { TranslationContent(state, onStart = {}, onStop = {}, onAudioSettings = {}) }
+    MaterialTheme {
+        TranslationContent(state, AudioSettings(), onStart = {}, onStop = {}, onClear = {}, onAudioSettings = {})
+    }
 }
