@@ -106,7 +106,7 @@ private class PaneScroll {
 }
 
 /** Top of each segment (px) within a pane's text, and the text's height. */
-private class PaneLayout(private val segmentTops: List<Float> = emptyList(), private val height: Float = 0f) {
+internal class PaneLayout(private val segmentTops: List<Float> = emptyList(), private val height: Float = 0f) {
     fun locate(y: Float): Pair<Int, Float> {
         val segment = segmentTops.indexOfLast { it <= y }.coerceAtLeast(0)
         val top = segmentTops.getOrElse(segment) { 0f }

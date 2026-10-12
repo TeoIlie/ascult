@@ -20,7 +20,7 @@ A personal Android app (Pixel, GrapheneOS) that streams the microphone to the [S
    echo "SONIOX_API_KEY=<your key>" > .env
    ```
 
-3. Build and install: `./gradlew installDebug` (or Run in Android Studio).
+3. Build and install: `./gradlew installDebug` (or Run in Android Studio). Unit tests: `./gradlew test`.
 4. On GrapheneOS, allow the app's **Network** permission (Settings → Apps → Ascult → Permissions). Without it the app shows `Unable to resolve host`.
 
 ## Using the app

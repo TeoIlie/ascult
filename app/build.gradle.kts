@@ -53,6 +53,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.okhttp)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+    // Android's org.json is a stub in JVM unit tests; use the real implementation.
+    testImplementation(libs.org.json)
 }
 
 /** SONIOX_API_KEY from the repo's .env file (same file tools/stream_test.py reads), or "" if absent. */
