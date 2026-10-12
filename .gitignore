@@ -3,3 +3,11 @@ __pycache__/
 *.jsonl
 .env
 run*.txt
+
+# Android
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+*.iml
