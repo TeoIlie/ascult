@@ -1,8 +1,8 @@
 tools/.venv/
 __pycache__/
-*.jsonl
 .env
-run*.txt
+# Local test data: script outputs, recordings and transcripts pulled from the phone
+tools/data/
 
 # Android
 .gradle/
@@ -11,5 +11,3 @@ build/
 local.properties
 .idea/
 *.iml
-recordings/
-transcripts/

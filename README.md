@@ -1,42 +1,75 @@
 # Ascult
 
-A personal Android app (Pixel, GrapheneOS) that streams the microphone to the [Soniox](https://soniox.com) real-time API and shows a live English translation of Romanian speech, built for following Romanian Orthodox sermons from across a church. It uses a pay-as-you-go API key instead of a subscription.
+A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermons from across a church. It streams the microphone to the [Soniox](https://soniox.com) real-time API and shows the Romanian transcript and a live English translation side by side. It uses a pay-as-you-go API key (roughly $0.10 an hour) instead of Soniox's ~$14/month app subscription.
 
-## Requirements
+## Features
 
-- Live Romanian → English translation, shown as it arrives (provisional text dimmed), with the Romanian alongside
-- Works for a speaker across the room: selectable audio source, gain, level meter
-- Keeps listening with the screen off, and reconnects if the network drops
-- Custom vocabulary (Soniox context) tailored to Orthodox sermons, editable in the app
-- API key entered in the app, never committed
-- No backend, no Google Play Services; sideloaded via `adb`
+- Live Romanian → English: final text in full colour, still-changing text dimmed, Romanian and English panes scrolled in sync.
+- Tuned for a distant speaker: microphone source picker, software gain, level meter, optional WAV recording to compare settings.
+- Keeps listening with the screen off (foreground service with a Stop notification), and keeps the screen awake while the app is open.
+- Survives network drops: audio is buffered for 30 s and sent once the connection is back; stalled connections are detected within ~20 s.
+- A dictionary of Orthodox church vocabulary sent to Soniox, editable in the app.
+- Transcripts can be shared and are saved automatically.
+- No backend and no Google Play Services; installed with `adb`.
 
 ## Setup
 
-1. Android Studio (or the Android SDK) with platform 37, and a phone with USB debugging enabled.
-2. Optional for debug builds: put your Soniox key in a gitignored `.env` at the repo root. Debug builds use it when no key is entered in the app.
+1. Android Studio (or the Android SDK) with platform 37, and a phone on Android 14+ with USB debugging enabled.
+2. Optional for debug builds: put your Soniox key in a gitignored `.env` at the repo root. Debug builds use it when no key is entered in the app; release builds never contain it.
 
    ```bash
    echo "SONIOX_API_KEY=<your key>" > .env
    ```
 
-3. Build and install: `./gradlew installDebug` (or Run in Android Studio). Unit tests: `./gradlew test`.
-4. On GrapheneOS, allow the app's **Network** permission (Settings → Apps → Ascult → Permissions). Without it the app shows `Unable to resolve host`.
+3. Build and install: `./gradlew installDebug` (or Run in Android Studio).
+4. On GrapheneOS, allow the app's **Network** permission (Settings → Apps → Ascult → Permissions). New apps may install with it denied, and the app then shows `Unable to resolve host "stt-rt.soniox.com"`. Microphone access can also be blocked by the global microphone toggle.
 
 ## Using the app
 
-- **Start / Stop**: the first Start asks for microphone and notification permission. Listening continues with the screen off; the notification has a Stop button.
-- **Audio settings** (the "Voice recognition · +0 dB" button): microphone source, gain, and saving a WAV recording of each session.
-- **Settings**: Soniox API key and the dictionary (expected words, fixed translations, context). **Reset** restores the bundled default; **Share JSON** exports edits so they can be copied into `app/src/main/assets/dictionary.json`.
-- **A− / A+** text size, **Share** the transcript, **Clear** to start a new one. Each Start adds a section labelled with its audio settings.
+- **Start / Stop**: the first Start asks for microphone and notification permission. Listening continues with the screen off; the notification has a Stop button. After Stop, the app waits briefly for Soniox to finish the last words.
+- **Sections**: each Start adds a section labelled with its microphone source, gain and start time, so text is kept across Stop/Start. **Clear** starts a new transcript.
+- **Audio settings** (the "Voice recognition · +0 dB" button):
+  - **Microphone source**: Voice recognition (default), Unprocessed, Mic or Camcorder. Each applies different phone processing; which works best for a distant speaker has to be found by ear and by transcript quality. Applies from the next Start.
+  - **Gain**: 0 to +24 dB, applied immediately. It raises quiet input but does not reduce background noise.
+  - **Save recording**: saves exactly what is sent to Soniox as a WAV named `<time>_<SOURCE>_+<gain>dB.wav`.
+- **Settings**:
+  - **Soniox API key**: stored on the phone only (excluded from backups).
+  - **Dictionary**: expected words, fixed translations (`țarina = field`), context (`domain: Orthodox sermon`) and background text, one entry per line. **Reset** restores the bundled default; **Share JSON** exports your edits so they can be copied into `app/src/main/assets/dictionary.json`.
+- **A− / A+** change the text size; **Share** sends the transcript as plain text.
+- **Scrolling**: both panes follow new text. Scroll either pane to review, and the other stays aligned; **Jump to live** (or scrolling to the end) resumes following.
+- **Reconnecting**: a grey "Connection lost, reconnecting…" line means the app is still recording and will catch up once the network is back. Red text is a real error (for example an invalid API key).
+
+Transcripts (saved every 15 s while listening and at Stop) and recordings are on the phone in `/sdcard/Android/data/com.teoilie.ascult/files/`.
+
+## The dictionary
+
+Soniox accepts a `context` with each session, and it made a clear difference in testing (farming metaphors in the sample sermon went from "toll" and "the slave's body" to "field" and "pickaxe"). The default in `app/src/main/assets/dictionary.json` covers:
+
+- **Context and background**: an Orthodox priest preaching in a reverberant church, with Scripture quotations and teachings of the Church Fathers.
+- **Expected words**: church spellings (`Iisus Hristos`), services, sacraments, church objects, clergy titles, feasts, saints and parables.
+- **Fixed translations**: standard English Orthodox terms (Theotokos, Great Lent, the Holy Mysteries, His Grace, Holy Pascha).
+
+Soniox rejects a context over about 10,000 characters; the default uses about 6,800, leaving room for words added in person.
 
 ## Desktop tools
 
+`tools/stream_test.py` streams an audio file to Soniox with the same settings and dictionary as the app and prints both languages. It is handy for checking dictionary changes against a recording.
+
 ```bash
-python3 -m venv tools/.venv && tools/.venv/bin/pip install websockets   # once
-tools/.venv/bin/python tools/stream_test.py <audio file> --speed 0    # needs ffmpeg and .env
-adb pull /sdcard/Android/data/com.teoilie.ascult/files/recordings/ recordings/
-adb pull /sdcard/Android/data/com.teoilie.ascult/files/transcripts/ transcripts/
+python3 -m venv tools/.venv && tools/.venv/bin/pip install websockets      # once; also needs ffmpeg
+tools/.venv/bin/python tools/stream_test.py <audio file> --speed 0       # --no-context to compare without the dictionary
 ```
 
-See [`tech.md`](tech.md) for the design and a map of the code.
+Local test data goes in the gitignored `tools/data/`:
+
+```bash
+adb pull /sdcard/Android/data/com.teoilie.ascult/files/recordings/ tools/data/recordings/
+adb pull /sdcard/Android/data/com.teoilie.ascult/files/transcripts/ tools/data/transcripts/
+tools/.venv/bin/python tools/stream_test.py tools/data/recordings/<file>.wav --speed 0 > tools/data/runs/<name>.txt
+```
+
+## Sharing the app
+
+It is built for one phone. Making it public would need short-lived Soniox keys handed out by a small server (instead of each user's own key), release signing, and a configurable language pair.
+
+Developer notes (architecture, code map, conventions) are in [`CLAUDE.md`](CLAUDE.md).

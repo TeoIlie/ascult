@@ -34,7 +34,7 @@ class SonioxException(val code: Int, message: String) : Exception("Soniox error 
     val retryable get() = code == 408 || code == 429 || code >= 500
 }
 
-/** Streams audio to the Soniox real-time API; see tech.md for the protocol. */
+/** Streams audio to the Soniox real-time API; see CLAUDE.md for the protocol. */
 class SonioxClient(
     private val http: OkHttpClient = OkHttpClient.Builder().pingInterval(PING_INTERVAL_SECONDS, TimeUnit.SECONDS).build(),
 ) {
