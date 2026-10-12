@@ -8,8 +8,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.teoilie.ascult.soniox.Dictionary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.json.JSONObject
 
 /** Android microphone sources worth comparing for a distant speaker; each applies different processing. */
 enum class MicSource(val label: String, val description: String, val audioSource: Int) {
@@ -32,11 +34,31 @@ private val Context.dataStore by preferencesDataStore("settings")
 private val SOURCE = stringPreferencesKey("audio_source")
 private val GAIN_DB = intPreferencesKey("gain_db")
 private val SAVE_RECORDING = booleanPreferencesKey("save_recording")
+private val API_KEY = stringPreferencesKey("soniox_api_key")
+private val DICTIONARY = stringPreferencesKey("dictionary_json")
 
 class SettingsStore(context: Context) {
     private val dataStore = context.dataStore
 
     val audio: Flow<AudioSettings> = dataStore.data.map { it.toAudioSettings() }
+
+    /** Entered in Settings; stored unencrypted in app-private storage (backups are disabled). */
+    val apiKey: Flow<String> = dataStore.data.map { it[API_KEY].orEmpty() }
+
+    suspend fun setApiKey(key: String) {
+        dataStore.edit { it[API_KEY] = key }
+    }
+
+    /** The in-app dictionary override, or null to use the bundled default. */
+    val dictionary: Flow<Dictionary?> = dataStore.data.map { prefs ->
+        prefs[DICTIONARY]?.let { json -> runCatching { Dictionary.fromJson(JSONObject(json)) }.getOrNull() }
+    }
+
+    suspend fun setDictionary(dictionary: Dictionary?) {
+        dataStore.edit { prefs ->
+            if (dictionary == null) prefs.remove(DICTIONARY) else prefs[DICTIONARY] = dictionary.toJson().toString()
+        }
+    }
 
     suspend fun updateAudio(transform: (AudioSettings) -> AudioSettings) {
         dataStore.edit { prefs ->

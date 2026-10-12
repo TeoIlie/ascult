@@ -25,7 +25,10 @@ private const val MODEL = "stt-rt-v5"
 /** One piece of text from Soniox: Romanian original or English translation, final or still provisional. */
 data class Token(val text: String, val isFinal: Boolean, val isTranslation: Boolean)
 
-class SonioxException(message: String) : Exception(message)
+/** An error reported by Soniox; timeouts, rate limits and server errors are worth retrying. */
+class SonioxException(val code: Int, message: String) : Exception("Soniox error $code: $message") {
+    val retryable get() = code == 408 || code == 429 || code >= 500
+}
 
 /** Streams audio to the Soniox real-time API; see tech.md for the protocol. */
 class SonioxClient(private val http: OkHttpClient = OkHttpClient()) {
@@ -34,13 +37,13 @@ class SonioxClient(private val http: OkHttpClient = OkHttpClient()) {
      * Sends [audio] (16 kHz mono PCM16 frames) and emits the tokens of each response. When [audio]
      * completes, the stream is ended and the flow completes once Soniox has finalised every token.
      */
-    fun transcribe(apiKey: String, context: JSONObject?, audio: Flow<ShortArray>): Flow<List<Token>> = callbackFlow {
+    fun transcribe(apiKey: String, dictionary: Dictionary, audio: Flow<ShortArray>): Flow<List<Token>> = callbackFlow {
         val listener = object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val response = JSONObject(text)
                 if (response.has("error_code")) {
-                    val code = response.opt("error_code")
-                    this@callbackFlow.close(SonioxException("Soniox error $code: ${response.optString("error_message")}"))
+                    val error = SonioxException(response.optInt("error_code"), response.optString("error_message"))
+                    this@callbackFlow.close(error)
                     return
                 }
                 trySend(parseTokens(response.optJSONArray("tokens")))
@@ -57,7 +60,7 @@ class SonioxClient(private val http: OkHttpClient = OkHttpClient()) {
         }
 
         val webSocket = http.newWebSocket(Request.Builder().url(URL).build(), listener)
-        webSocket.send(config(apiKey, context).toString())
+        webSocket.send(config(apiKey, dictionary).toString())
         launch {
             audio.collect { frame -> webSocket.send(frame.toPcmBytes()) }
             webSocket.send("") // end of audio: Soniox finalises the remaining tokens, then sends "finished"
@@ -65,7 +68,7 @@ class SonioxClient(private val http: OkHttpClient = OkHttpClient()) {
         awaitClose { webSocket.cancel() }
     }.buffer(Channel.UNLIMITED)
 
-    private fun config(apiKey: String, context: JSONObject?) = JSONObject().apply {
+    private fun config(apiKey: String, dictionary: Dictionary) = JSONObject().apply {
         put("api_key", apiKey)
         put("model", MODEL)
         put("audio_format", "pcm_s16le")
@@ -73,7 +76,7 @@ class SonioxClient(private val http: OkHttpClient = OkHttpClient()) {
         put("num_channels", 1)
         put("language_hints", JSONArray(listOf("ro")))
         put("translation", JSONObject().put("type", "one_way").put("target_language", "en"))
-        if (context != null) put("context", context)
+        put("context", dictionary.toJson())
     }
 
     private fun parseTokens(tokens: JSONArray?): List<Token> = buildList {

@@ -43,7 +43,7 @@ Compose UI ◄── ViewModel (StateFlow) ◄── token stream (Romanian + En
 
 - Then binary frames of raw PCM audio.
 - Responses carry `tokens[]` with `text`, `is_final`, `language`, and `translation_status` (distinguishes original from translated tokens). Final tokens are appended once; non-final tokens replace the previous provisional tail.
-- Send a keepalive message at least every 40 s when no audio is flowing (e.g. paused).
+- Send a keepalive message at least every 40 s when no audio is flowing. The app streams audio continuously while listening and has no pause, so it does not need keepalives.
 - End the stream with an empty text frame.
 
 Verify field names against the current Soniox docs when implementing; the model name changes between versions.
@@ -56,7 +56,7 @@ The speaker uses uncommon words, so the session config carries a default diction
 - `translation_terms`: `{ "source": "...", "target": "..." }` pairs forcing a specific English rendering.
 - `general` / `text`: optional domain and background description (e.g. topic, setting).
 
-The default ships as a bundled asset (`app/src/main/assets/dictionary.json`), version-controlled, and is loaded on every session. Later, it can be editable in-app with overrides stored in DataStore.
+The default ships as a bundled asset (`app/src/main/assets/dictionary.json`), version-controlled, and shared with `tools/stream_test.py`. Settings → Dictionary edits it in the app as one-entry-per-line text (expected words, `source = target` translations, `key: value` context, background text). Edits are stored as an override in DataStore; Reset returns to the bundled default, and Share JSON exports the edited dictionary in the asset's format so it can be copied back into the repo.
 
 ## Audio tuning
 
@@ -73,11 +73,17 @@ adb pull /sdcard/Android/data/com.teoilie.ascult/files/recordings/ recordings/
 tools/.venv/bin/python tools/stream_test.py recordings/<file>.wav --speed 0
 ```
 
+## Sessions, reconnection and transcripts
+
+- Each Start appends a segment labelled with its source, gain and start time; text is kept across Stop/Start until Clear.
+- Captured audio goes into a 30 s buffer that outlives individual WebSocket connections. If the connection drops (network error, or Soniox timeout/rate-limit/server error), the app reconnects with backoff (1, 2, 4, 8, then 10 s) and sends the buffered audio, so only that connection's provisional text is lost. Other Soniox errors (e.g. invalid key) end the session.
+- Share sends the transcript as plain text. Each conversation (since the last Clear) is also saved when a session ends, to `/sdcard/Android/data/com.teoilie.ascult/files/transcripts/<start time>.txt`.
+
 ## API key
 
-Until the settings screen exists (step 7), debug builds read `SONIOX_API_KEY` from the gitignored `.env` at the repo root (the same file `tools/stream_test.py` uses) into `BuildConfig`; release builds get an empty key.
+Entered in Settings and stored in DataStore (app-private, unencrypted; backups disabled). When it is empty, debug builds fall back to `SONIOX_API_KEY` from the gitignored `.env` at the repo root (the same file `tools/stream_test.py` uses), baked into `BuildConfig`; release builds have no fallback.
 
-Eventually entered on a settings screen and stored in DataStore; never committed. Key retrieval sits behind one small interface (`ApiKeyProvider`) so a future public version could swap to Soniox temporary keys minted by a backend, or bring-your-own-key.
+A public version would replace this with Soniox temporary keys minted by a small backend; the key is read in one place (`TranslationSession.start`).
 
 ## Build steps
 
@@ -89,7 +95,7 @@ Each step ends with something runnable.
 4. **Streaming.** WebSocket client, config message with dictionary, audio upload, token parsing, two-pane Romanian/English display with dimmed provisional text. First useful milestone.
 5. **Foreground service.** Move capture and streaming into a microphone foreground service with a notification and stop action; screen-off listening.
 6. **Audio tuning.** Audio source picker (`UNPROCESSED`, `VOICE_RECOGNITION`, `MIC`, ...), software gain, optional WAV recording of sessions for comparison and replay through the step-1 script.
-7. **Polish.** Settings screen (API key, source, gain), reconnect on network drop, keepalive while paused, transcript save/share, in-app dictionary editing.
+7. **Polish.** Settings screen (API key, in-app dictionary editing), reconnect on network drop, transcript share and auto-save.
 
 ## GrapheneOS notes
 

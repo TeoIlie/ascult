@@ -50,10 +50,11 @@ import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.Transcript
+import com.teoilie.ascult.soniox.toPlainText
 import kotlin.math.roundToInt
 
 @Composable
-fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
+fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val audioSettings by viewModel.audioSettings.collectAsStateWithLifecycle()
     var showAudioSettings by rememberSaveable { mutableStateOf(false) }
@@ -74,7 +75,9 @@ fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
         },
         onStop = viewModel::stop,
         onClear = viewModel::clear,
+        onShare = { share(context, "Ascult transcript", state.segments.toPlainText()) },
         onAudioSettings = { showAudioSettings = true },
+        onOpenSettings = onOpenSettings,
     )
 
     if (showAudioSettings) {
@@ -95,15 +98,21 @@ private fun TranslationContent(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onClear: () -> Unit,
+    onShare: () -> Unit,
     onAudioSettings: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Scaffold(
         bottomBar = { ControlBar(state, audioSettings, onStart, onStop, onClear, onAudioSettings) },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onShare, enabled = state.segments.isNotEmpty()) { Text("Share") }
+                TextButton(onClick = onOpenSettings) { Text("Settings") }
+            }
             Pane("Română", state.segments, Segment::romanian, placeholder = "Transcrierea va apărea aici.")
             HorizontalDivider()
             Pane("English", state.segments, Segment::english, placeholder = "The translation will appear here.")
@@ -232,6 +241,9 @@ private fun TranslationContentPreview() {
         ),
     )
     MaterialTheme {
-        TranslationContent(state, AudioSettings(), onStart = {}, onStop = {}, onClear = {}, onAudioSettings = {})
+        TranslationContent(
+            state, AudioSettings(),
+            onStart = {}, onStop = {}, onClear = {}, onShare = {}, onAudioSettings = {}, onOpenSettings = {},
+        )
     }
 }
