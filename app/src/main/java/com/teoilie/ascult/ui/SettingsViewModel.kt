@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.teoilie.ascult.settings
+import com.teoilie.ascult.app
 import com.teoilie.ascult.soniox.Dictionary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -44,24 +44,30 @@ private fun String.pairs(separator: Char): List<Pair<String, String>> = lines().
     if (left.isEmpty() || right.isEmpty()) null else left to right
 }
 
-data class SettingsForm(val apiKey: String, val dictionary: DictionaryText, val dictionaryIsDefault: Boolean)
+data class SettingsForm(
+    val apiKey: String,
+    val dictionary: DictionaryText,
+    val dictionaryIsDefault: Boolean,
+    /** The bundled dictionary, for Reset and for recognising edits that match it. */
+    val defaultDictionary: Dictionary,
+)
 
 /** Edits are saved as they are typed; the form keeps its own text so typing is never interrupted. */
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
-    private val settings = application.settings
-    private lateinit var defaultDictionary: Dictionary
+    private val settings = application.app.settings
 
     var form by mutableStateOf<SettingsForm?>(null)
         private set
 
     init {
         viewModelScope.launch {
-            defaultDictionary = withContext(Dispatchers.IO) { Dictionary.default(application) }
+            val defaultDictionary = withContext(Dispatchers.IO) { Dictionary.default(application) }
             val dictionary = settings.dictionary.first()
             form = SettingsForm(
                 apiKey = settings.apiKey.first(),
                 dictionary = DictionaryText.from(dictionary ?: defaultDictionary),
                 dictionaryIsDefault = dictionary == null,
+                defaultDictionary = defaultDictionary,
             )
         }
     }
@@ -72,14 +78,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setDictionary(text: DictionaryText) {
+        val current = form ?: return
         // Edits that match the bundled default are stored as "no override".
-        val dictionary = text.toDictionary().takeIf { it != defaultDictionary }
-        form = form?.copy(dictionary = text, dictionaryIsDefault = dictionary == null)
+        val dictionary = text.toDictionary().takeIf { it != current.defaultDictionary }
+        form = current.copy(dictionary = text, dictionaryIsDefault = dictionary == null)
         viewModelScope.launch { settings.setDictionary(dictionary) }
     }
 
     fun resetDictionary() {
-        form = form?.copy(dictionary = DictionaryText.from(defaultDictionary), dictionaryIsDefault = true)
+        val current = form ?: return
+        form = current.copy(dictionary = DictionaryText.from(current.defaultDictionary), dictionaryIsDefault = true)
         viewModelScope.launch { settings.setDictionary(null) }
     }
 

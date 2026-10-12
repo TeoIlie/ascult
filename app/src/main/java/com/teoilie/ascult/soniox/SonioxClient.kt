@@ -74,6 +74,7 @@ class SonioxClient(
         awaitClose { webSocket.cancel() }
     }.buffer(Channel.UNLIMITED)
 
+    // Mirrored by build_config() in tools/stream_test.py; keep the two in sync.
     private fun config(apiKey: String, dictionary: Dictionary) = JSONObject().apply {
         put("api_key", apiKey)
         put("model", MODEL)

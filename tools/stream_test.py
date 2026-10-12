@@ -53,6 +53,7 @@ def decode_pcm(path: str) -> bytes:
 
 
 def build_config(api_key: str, context: dict | None) -> dict:
+    # Mirrors SonioxClient.config() in the app (also URL and MODEL above); keep the two in sync.
     config = {
         "api_key": api_key,
         "model": MODEL,

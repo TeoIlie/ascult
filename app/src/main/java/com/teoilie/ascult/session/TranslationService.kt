@@ -12,7 +12,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import com.teoilie.ascult.MainActivity
 import com.teoilie.ascult.R
-import com.teoilie.ascult.session
+import com.teoilie.ascult.app
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,7 +39,7 @@ class TranslationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            session.stop()
+            app.session.stop()
             return START_NOT_STICKY
         }
 
@@ -50,7 +50,7 @@ class TranslationService : Service() {
                 .apply { acquire(WAKE_LOCK_TIMEOUT_MS) }
         }
         scope.launch {
-            session.state.first { !it.listening }
+            app.session.state.first { !it.listening }
             stopSelf()
         }
         return START_NOT_STICKY

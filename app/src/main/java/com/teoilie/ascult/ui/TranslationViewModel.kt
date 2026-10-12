@@ -3,10 +3,9 @@ package com.teoilie.ascult.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.teoilie.ascult.session
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.session.TranslationService
-import com.teoilie.ascult.settings
+import com.teoilie.ascult.app
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.TEXT_SCALES
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,8 +14,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class TranslationViewModel(application: Application) : AndroidViewModel(application) {
-    private val session = application.session
-    private val settings = application.settings
+    private val session = application.app.session
+    private val settings = application.app.settings
 
     val state: StateFlow<SessionState> = session.state
     val audioSettings: StateFlow<AudioSettings> =

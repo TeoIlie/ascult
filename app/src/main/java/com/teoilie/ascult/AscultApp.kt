@@ -12,6 +12,5 @@ class AscultApp : Application() {
     val session by lazy { TranslationSession(this, settings) }
 }
 
-val Context.session: TranslationSession get() = (applicationContext as AscultApp).session
-
-val Context.settings: SettingsStore get() = (applicationContext as AscultApp).settings
+/** The app's shared objects: `context.app.session`, `context.app.settings`. */
+val Context.app: AscultApp get() = applicationContext as AscultApp

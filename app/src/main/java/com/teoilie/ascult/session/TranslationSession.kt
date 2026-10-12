@@ -17,9 +17,8 @@ import com.teoilie.ascult.soniox.Dictionary
 import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.SonioxClient
 import com.teoilie.ascult.soniox.SonioxException
-import com.teoilie.ascult.soniox.Token
-import com.teoilie.ascult.soniox.Transcript
-import com.teoilie.ascult.soniox.toPlainText
+import com.teoilie.ascult.soniox.withTokens
+import com.teoilie.ascult.soniox.withoutProvisional
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,9 +43,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** How long to wait for Soniox to finalise the last tokens after Stop before giving up. */
 private const val FINISH_TIMEOUT_MS = 5_000L
@@ -87,16 +83,12 @@ data class SessionState(
 class TranslationSession(private val context: Context, private val settings: SettingsStore) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val soniox = SonioxClient()
+    private val files = SessionFiles(context, scope)
+
     /** Kept current so gain changes apply to a running session. */
     private val audioSettings = settings.audio.stateIn(scope, SharingStarted.Eagerly, AudioSettings())
     private val stopRequested = MutableStateFlow(false)
     private var sessionJob: Job? = null
-
-    /** Serialises transcript writes so an autosave and the final save never interleave. */
-    private val fileWriter = Dispatchers.IO.limitedParallelism(1)
-
-    /** Where the transcript since the last Clear is saved; named when its first session starts. */
-    private var transcriptFile: File? = null
 
     private val _state = MutableStateFlow(SessionState())
     val state: StateFlow<SessionState> = _state.asStateFlow()
@@ -117,12 +109,8 @@ class TranslationSession(private val context: Context, private val settings: Set
 
         // Source and recording are fixed for the session; gain is read per frame so it can be adjusted live.
         val audioSettings = settings.audio.first()
-        val recording = if (audioSettings.saveRecording) {
-            newFile("recordings", "_${audioSettings.source.name}_+${audioSettings.gainDb}dB.wav")
-        } else {
-            null
-        }
-        if (transcriptFile == null) transcriptFile = newFile("transcripts", ".txt")
+        val recording = if (audioSettings.saveRecording) files.newRecording(audioSettings) else null
+        files.startTranscriptIfNeeded()
         val label = "${audioSettings.source.label} · +${audioSettings.gainDb} dB · ${timestamp("HH:mm")}"
 
         stopRequested.value = false
@@ -136,7 +124,7 @@ class TranslationSession(private val context: Context, private val settings: Set
                 _state.update { it.copy(error = e.message ?: e.toString()) }
             } finally {
                 _state.update { it.copy(phase = Phase.IDLE, levelDb = SILENCE_DBFS) }
-                saveTranscript()
+                files.saveTranscript(_state.value.segments)
             }
         }
         return true
@@ -172,7 +160,7 @@ class TranslationSession(private val context: Context, private val settings: Set
         val autosave = launch {
             while (true) {
                 delay(AUTOSAVE_INTERVAL_MS)
-                saveTranscript()
+                files.saveTranscript(_state.value.segments)
             }
         }
 
@@ -183,7 +171,7 @@ class TranslationSession(private val context: Context, private val settings: Set
                     attempt = 0
                     _state.update {
                         val phase = if (it.phase == Phase.RECONNECTING) Phase.LISTENING else it.phase
-                        it.copy(phase = phase, error = null).withTokens(tokens)
+                        it.copy(phase = phase, error = null, segments = it.segments.withTokens(tokens))
                     }
                 }
                 if (stopRequested.value) break
@@ -194,7 +182,7 @@ class TranslationSession(private val context: Context, private val settings: Set
                 if (!e.isRetryable()) throw e
                 _state.update { it.copy(phase = Phase.RECONNECTING) }
             }
-            _state.update { it.withoutProvisional() }
+            _state.update { it.copy(segments = it.segments.withoutProvisional()) }
             delay(minOf(1_000L shl attempt.coerceAtMost(4), MAX_RECONNECT_DELAY_MS))
             attempt++
             if (stopRequested.value) break
@@ -219,40 +207,8 @@ class TranslationSession(private val context: Context, private val settings: Set
     fun clear() {
         if (sessionJob?.isActive == true) return
         _state.value = SessionState()
-        transcriptFile = null
-    }
-
-    private fun saveTranscript() {
-        val file = transcriptFile ?: return
-        val text = _state.value.segments.toPlainText()
-        scope.launch(fileWriter) { file.writeText(text + "\n") }
-    }
-
-    /** e.g. recordings/20261012-191500_UNPROCESSED_+12dB.wav in the app's external files directory. */
-    private fun newFile(dir: String, suffix: String): File {
-        val parent = File(context.getExternalFilesDir(null), dir).apply { mkdirs() }
-        return File(parent, timestamp("yyyyMMdd-HHmmss") + suffix)
+        files.resetTranscript()
     }
 }
-
-private fun timestamp(pattern: String) = SimpleDateFormat(pattern, Locale.US).format(Date())
 
 private fun Throwable.isRetryable() = this is IOException || (this is SonioxException && retryable)
-
-private fun SessionState.withTokens(tokens: List<Token>): SessionState {
-    val current = segments.last()
-    val updated = current.copy(
-        romanian = current.romanian.update(tokens.filterNot { it.isTranslation }),
-        english = current.english.update(tokens.filter { it.isTranslation }),
-    )
-    return copy(segments = segments.dropLast(1) + updated)
-}
-
-private fun SessionState.withoutProvisional(): SessionState {
-    val current = segments.last()
-    val updated = current.copy(
-        romanian = Transcript(current.romanian.final),
-        english = Transcript(current.english.final),
-    )
-    return copy(segments = segments.dropLast(1) + updated)
-}
