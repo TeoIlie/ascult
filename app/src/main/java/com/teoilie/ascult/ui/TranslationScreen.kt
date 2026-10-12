@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,10 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -26,20 +22,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -113,55 +103,8 @@ private fun TranslationContent(
                 TextButton(onClick = onShare, enabled = state.segments.isNotEmpty()) { Text("Share") }
                 TextButton(onClick = onOpenSettings) { Text("Settings") }
             }
-            Pane("Română", state.segments, Segment::romanian, placeholder = "Transcrierea va apărea aici.")
-            HorizontalDivider()
-            Pane("English", state.segments, Segment::english, placeholder = "The translation will appear here.")
+            SyncedPanes(state.segments, Modifier.weight(1f))
         }
-    }
-}
-
-/**
- * Each segment under its settings label; final text in full colour, provisional text dimmed.
- * Follows the end of the text as it grows.
- */
-@Composable
-private fun ColumnScope.Pane(
-    label: String,
-    segments: List<Segment>,
-    transcriptOf: (Segment) -> Transcript,
-    placeholder: String,
-) {
-    val scroll = rememberScrollState()
-    LaunchedEffect(scroll) {
-        snapshotFlow { scroll.maxValue }.collect { scroll.animateScrollTo(it) }
-    }
-    val dimmed = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-    val segmentLabel = SpanStyle(color = MaterialTheme.colorScheme.primary, fontSize = MaterialTheme.typography.labelSmall.fontSize)
-    val text = if (segments.isEmpty()) {
-        AnnotatedString(placeholder, SpanStyle(color = dimmed))
-    } else {
-        buildAnnotatedString {
-            segments.forEachIndexed { i, segment ->
-                if (i > 0) append("\n\n")
-                withStyle(segmentLabel) { append(segment.label) }
-                append("\n")
-                val transcript = transcriptOf(segment)
-                val final = transcript.final.trimStart()
-                append(final)
-                withStyle(SpanStyle(color = dimmed)) {
-                    append(if (final.isEmpty()) transcript.provisional.trimStart() else transcript.provisional)
-                }
-            }
-        }
-    }
-
-    Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(top = 8.dp).verticalScroll(scroll),
-        )
     }
 }
 
