@@ -59,17 +59,26 @@ private const val MAX_RECONNECT_DELAY_MS = 10_000L
 /** How often the transcript is saved while listening, so little is lost if the process is killed. */
 private const val AUTOSAVE_INTERVAL_MS = 15_000L
 
+enum class Phase {
+    IDLE,
+    LISTENING,
+    /** Still capturing (into the buffer) while the connection to Soniox is re-established. */
+    RECONNECTING,
+    /** Microphone off; waiting for Soniox to finalise the last tokens. */
+    STOPPING,
+}
+
 data class SessionState(
-    val listening: Boolean = false,
-    val stopping: Boolean = false,
-    val reconnecting: Boolean = false,
+    val phase: Phase = Phase.IDLE,
     val levelDb: Float = SILENCE_DBFS,
     /** Runs since the last Clear; the last one is the current (or most recent) session. */
     val segments: List<Segment> = emptyList(),
     val error: String? = null,
     /** WAV file of the last session's audio, if recording was on. */
     val recording: File? = null,
-)
+) {
+    val listening: Boolean get() = phase != Phase.IDLE
+}
 
 /**
  * Microphone → Soniox → transcripts. Lives for the whole process so it survives the screen going
@@ -78,8 +87,8 @@ data class SessionState(
 class TranslationSession(private val context: Context, private val settings: SettingsStore) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val soniox = SonioxClient()
+    /** Kept current so gain changes apply to a running session. */
     private val audioSettings = settings.audio.stateIn(scope, SharingStarted.Eagerly, AudioSettings())
-    private val apiKeySetting = settings.apiKey.stateIn(scope, SharingStarted.Eagerly, "")
     private val stopRequested = MutableStateFlow(false)
     private var sessionJob: Job? = null
 
@@ -93,21 +102,21 @@ class TranslationSession(private val context: Context, private val settings: Set
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
     /** Starts listening; returns false (with [SessionState.error] set) if it cannot. */
-    fun start(): Boolean {
+    suspend fun start(): Boolean {
         if (sessionJob?.isActive == true) return true
         val permission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
         if (permission != PackageManager.PERMISSION_GRANTED) {
             _state.update { it.copy(error = "Microphone permission is required") }
             return false
         }
-        val apiKey = apiKeySetting.value.ifBlank { BuildConfig.SONIOX_API_KEY }
+        val apiKey = settings.apiKey.first().ifBlank { BuildConfig.SONIOX_API_KEY }
         if (apiKey.isBlank()) {
             _state.update { it.copy(error = "No Soniox API key: add one in Settings") }
             return false
         }
 
         // Source and recording are fixed for the session; gain is read per frame so it can be adjusted live.
-        val audioSettings = audioSettings.value
+        val audioSettings = settings.audio.first()
         val recording = if (audioSettings.saveRecording) {
             newFile("recordings", "_${audioSettings.source.name}_+${audioSettings.gainDb}dB.wav")
         } else {
@@ -117,7 +126,7 @@ class TranslationSession(private val context: Context, private val settings: Set
         val label = "${audioSettings.source.label} · +${audioSettings.gainDb} dB · ${timestamp("HH:mm")}"
 
         stopRequested.value = false
-        _state.update { SessionState(listening = true, recording = recording, segments = it.segments + Segment(label)) }
+        _state.update { SessionState(Phase.LISTENING, recording = recording, segments = it.segments + Segment(label)) }
         sessionJob = scope.launch {
             try {
                 listen(apiKey, audioSettings, recording)
@@ -126,7 +135,7 @@ class TranslationSession(private val context: Context, private val settings: Set
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: e.toString()) }
             } finally {
-                _state.update { it.copy(listening = false, stopping = false, reconnecting = false, levelDb = SILENCE_DBFS) }
+                _state.update { it.copy(phase = Phase.IDLE, levelDb = SILENCE_DBFS) }
                 saveTranscript()
             }
         }
@@ -172,13 +181,18 @@ class TranslationSession(private val context: Context, private val settings: Set
             try {
                 soniox.transcribe(apiKey, dictionary, audio.receiveAsFlow()).collect { tokens ->
                     attempt = 0
-                    _state.update { it.copy(reconnecting = false, error = null).withTokens(tokens) }
+                    _state.update {
+                        val phase = if (it.phase == Phase.RECONNECTING) Phase.LISTENING else it.phase
+                        it.copy(phase = phase, error = null).withTokens(tokens)
+                    }
                 }
                 if (stopRequested.value) break
                 // Closed by the server although we are still listening: treat as a dropped connection.
             } catch (e: Exception) {
-                if (e is CancellationException || !e.isRetryable() || stopRequested.value) throw e
-                _state.update { it.copy(reconnecting = true, error = "Connection lost, reconnecting… (${e.message})") }
+                if (e is CancellationException) throw e
+                if (stopRequested.value) break // stopped while the connection was down: nothing left to finalise
+                if (!e.isRetryable()) throw e
+                _state.update { it.copy(phase = Phase.RECONNECTING) }
             }
             _state.update { it.withoutProvisional() }
             delay(minOf(1_000L shl attempt.coerceAtMost(4), MAX_RECONNECT_DELAY_MS))
@@ -194,7 +208,7 @@ class TranslationSession(private val context: Context, private val settings: Set
         val job = sessionJob ?: return
         if (!job.isActive) return
         stopRequested.value = true
-        _state.update { it.copy(stopping = true, levelDb = SILENCE_DBFS) }
+        _state.update { it.copy(phase = Phase.STOPPING, levelDb = SILENCE_DBFS) }
         scope.launch {
             delay(FINISH_TIMEOUT_MS)
             job.cancel()

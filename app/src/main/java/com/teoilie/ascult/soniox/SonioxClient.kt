@@ -18,9 +18,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.TimeUnit
 
 private const val URL = "wss://stt-rt.soniox.com/transcribe-websocket"
 private const val MODEL = "stt-rt-v5"
+
+/** A connection that misses a pong for this long fails, so a silently stalled network triggers a reconnect. */
+private const val PING_INTERVAL_SECONDS = 10L
 
 /** One piece of text from Soniox: Romanian original or English translation, final or still provisional. */
 data class Token(val text: String, val isFinal: Boolean, val isTranslation: Boolean)
@@ -31,7 +35,9 @@ class SonioxException(val code: Int, message: String) : Exception("Soniox error 
 }
 
 /** Streams audio to the Soniox real-time API; see tech.md for the protocol. */
-class SonioxClient(private val http: OkHttpClient = OkHttpClient()) {
+class SonioxClient(
+    private val http: OkHttpClient = OkHttpClient.Builder().pingInterval(PING_INTERVAL_SECONDS, TimeUnit.SECONDS).build(),
+) {
 
     /**
      * Sends [audio] (16 kHz mono PCM16 frames) and emits the tokens of each response. When [audio]

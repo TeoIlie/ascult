@@ -38,6 +38,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.audio.SILENCE_DBFS
+import com.teoilie.ascult.session.Phase
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.TEXT_SCALES
@@ -144,6 +145,13 @@ private fun ControlBar(
             state.error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
+            if (state.phase == Phase.RECONNECTING) {
+                Text(
+                    "Connection lost, reconnecting… (audio is kept and sent once back)",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             state.recording?.let {
                 Text(
                     "${if (state.listening) "Recording to" else "Saved"} ${it.name}",
@@ -163,10 +171,10 @@ private fun ControlBar(
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LevelMeter(state.levelDb, modifier = Modifier.weight(1f))
-                when {
-                    state.stopping -> Button(onClick = {}, enabled = false) { Text("Stopping…") }
-                    state.listening -> Button(onClick = onStop) { Text("Stop") }
-                    else -> Button(onClick = onStart) { Text("Start") }
+                when (state.phase) {
+                    Phase.IDLE -> Button(onClick = onStart) { Text("Start") }
+                    Phase.LISTENING, Phase.RECONNECTING -> Button(onClick = onStop) { Text("Stop") }
+                    Phase.STOPPING -> Button(onClick = {}, enabled = false) { Text("Stopping…") }
                 }
             }
         }
@@ -192,7 +200,7 @@ private fun LevelMeter(levelDb: Float, modifier: Modifier = Modifier) {
 @Composable
 private fun TranslationContentPreview() {
     val state = SessionState(
-        listening = true,
+        phase = Phase.LISTENING,
         levelDb = -24f,
         segments = listOf(
             Segment(

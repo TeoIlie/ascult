@@ -38,7 +38,10 @@ class AudioCapture(private val source: Int) {
             AudioFormat.ENCODING_PCM_16BIT,
             max(minBuffer, FRAME_SAMPLES * 2 * 4),
         )
-        check(record.state == AudioRecord.STATE_INITIALIZED) { "Microphone could not be opened" }
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            record.release()
+            error("Microphone could not be opened")
+        }
 
         try {
             record.startRecording()
