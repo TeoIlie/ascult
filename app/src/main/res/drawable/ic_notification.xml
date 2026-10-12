@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher foreground, cropped to its content for the status bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="60"
+    android:viewportHeight="60">
+    <group
+        android:translateX="-25"
+        android:translateY="-25">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M34,36h28a6,6 0,0 1,6 6v18a6,6 0,0 1,-6 6h-16l-10,8v-8h-2a6,6 0,0 1,-6 -6v-18a6,6 0,0 1,6 -6z" />
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:pathData="M74,44a10,10 0,0 1,0 14M80,39a17,17 0,0 1,0 24" />
+    </group>
+</vector>

@@ -41,6 +41,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.audio.SILENCE_DBFS
+import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.soniox.Transcript
 import kotlin.math.roundToInt
 
@@ -48,16 +49,18 @@ import kotlin.math.roundToInt
 fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        viewModel.start() // reports the error itself if permission was denied
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        viewModel.start() // reports the error itself if the microphone was denied
     }
 
     TranslationContent(
         state = state,
         onStart = {
-            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED
-            if (granted) viewModel.start() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            // The microphone is required; notifications only make the session's Stop button visible.
+            val missing = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS).filter {
+                ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+            }
+            if (missing.isEmpty()) viewModel.start() else permissionLauncher.launch(missing.toTypedArray())
         },
         onStop = viewModel::stop,
     )
@@ -65,7 +68,7 @@ fun TranslationScreen(viewModel: TranslationViewModel = viewModel()) {
 
 /** Two panes: Romanian transcript on top, English translation below; controls at the bottom. */
 @Composable
-private fun TranslationContent(state: UiState, onStart: () -> Unit, onStop: () -> Unit) {
+private fun TranslationContent(state: SessionState, onStart: () -> Unit, onStop: () -> Unit) {
     Scaffold(
         bottomBar = { ControlBar(state, onStart, onStop) },
     ) { padding ->
@@ -111,7 +114,7 @@ private fun ColumnScope.Pane(label: String, transcript: Transcript, placeholder:
 }
 
 @Composable
-private fun ControlBar(state: UiState, onStart: () -> Unit, onStop: () -> Unit) {
+private fun ControlBar(state: SessionState, onStart: () -> Unit, onStop: () -> Unit) {
     Surface(tonalElevation = 3.dp) {
         Column(
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
@@ -150,7 +153,7 @@ private fun LevelMeter(levelDb: Float, modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 private fun TranslationContentPreview() {
-    val state = UiState(
+    val state = SessionState(
         listening = true,
         levelDb = -24f,
         romanian = Transcript("Fiindcă a cădea e omenește.", " Problema este"),
