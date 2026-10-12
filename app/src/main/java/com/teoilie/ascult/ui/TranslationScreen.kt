@@ -22,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.audio.SILENCE_DBFS
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.settings.AudioSettings
+import com.teoilie.ascult.settings.TEXT_SCALES
 import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.Transcript
 import com.teoilie.ascult.soniox.toPlainText
@@ -47,8 +50,17 @@ import kotlin.math.roundToInt
 fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val audioSettings by viewModel.audioSettings.collectAsStateWithLifecycle()
+    val textScale by viewModel.textScale.collectAsStateWithLifecycle()
     var showAudioSettings by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+
+    // Keep the screen from timing out while listening and visible; the power button still turns it off.
+    val view = LocalView.current
+    DisposableEffect(view, state.listening) {
+        view.keepScreenOn = state.listening
+        onDispose { view.keepScreenOn = false }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         viewModel.start() // reports the error itself if the microphone was denied
     }
@@ -56,6 +68,8 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
     TranslationContent(
         state = state,
         audioSettings = audioSettings,
+        textScale = textScale,
+        onTextScale = viewModel::changeTextScale,
         onStart = {
             // The microphone is required; notifications only make the session's Stop button visible.
             val missing = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS).filter {
@@ -85,6 +99,8 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
 private fun TranslationContent(
     state: SessionState,
     audioSettings: AudioSettings,
+    textScale: Float,
+    onTextScale: (steps: Int) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onClear: () -> Unit,
@@ -99,11 +115,14 @@ private fun TranslationContent(
             modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { onTextScale(-1) }, enabled = textScale > TEXT_SCALES.first()) { Text("A−") }
+                TextButton(onClick = { onTextScale(1) }, enabled = textScale < TEXT_SCALES.last()) { Text("A+") }
+                Spacer(Modifier.weight(1f))
                 TextButton(onClick = onShare, enabled = state.segments.isNotEmpty()) { Text("Share") }
                 TextButton(onClick = onOpenSettings) { Text("Settings") }
             }
-            SyncedPanes(state.segments, Modifier.weight(1f))
+            SyncedPanes(state.segments, textScale, Modifier.weight(1f))
         }
     }
 }
@@ -185,7 +204,7 @@ private fun TranslationContentPreview() {
     )
     MaterialTheme {
         TranslationContent(
-            state, AudioSettings(),
+            state, AudioSettings(), textScale = 1f, onTextScale = {},
             onStart = {}, onStop = {}, onClear = {}, onShare = {}, onAudioSettings = {}, onOpenSettings = {},
         )
     }

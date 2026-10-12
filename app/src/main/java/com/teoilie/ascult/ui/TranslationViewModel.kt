@@ -8,6 +8,7 @@ import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.session.TranslationService
 import com.teoilie.ascult.settings
 import com.teoilie.ascult.settings.AudioSettings
+import com.teoilie.ascult.settings.TEXT_SCALES
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -20,6 +21,15 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val state: StateFlow<SessionState> = session.state
     val audioSettings: StateFlow<AudioSettings> =
         settings.audio.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AudioSettings())
+
+    val textScale: StateFlow<Float> = settings.textScale.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1f)
+
+    /** Moves the text size [steps] along [TEXT_SCALES]. */
+    fun changeTextScale(steps: Int) {
+        val current = TEXT_SCALES.indexOfFirst { it >= textScale.value }.takeIf { it >= 0 } ?: TEXT_SCALES.lastIndex
+        val next = TEXT_SCALES[(current + steps).coerceIn(0, TEXT_SCALES.lastIndex)]
+        viewModelScope.launch { settings.setTextScale(next) }
+    }
 
     fun start() {
         // Start the session while the app is in the foreground (required for microphone access),

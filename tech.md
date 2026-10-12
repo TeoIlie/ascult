@@ -75,9 +75,11 @@ tools/.venv/bin/python tools/stream_test.py recordings/<file>.wav --speed 0
 
 ## Sessions, reconnection and transcripts
 
+- While listening with the app visible, the screen is kept from timing out (the power button still turns it off; listening continues). A− / A+ scale both panes' text, stored in DataStore.
+
 - Each Start appends a segment labelled with its source, gain and start time; text is kept across Stop/Start until Clear.
 - Captured audio goes into a 30 s buffer that outlives individual WebSocket connections. If the connection drops (network error, or Soniox timeout/rate-limit/server error), the app reconnects with backoff (1, 2, 4, 8, then 10 s) and sends the buffered audio, so only that connection's provisional text is lost. Other Soniox errors (e.g. invalid key) end the session.
-- Share sends the transcript as plain text. Each conversation (since the last Clear) is also saved when a session ends, to `/sdcard/Android/data/com.teoilie.ascult/files/transcripts/<start time>.txt`.
+- Share sends the transcript as plain text. Each conversation (since the last Clear) is also saved every 15 s while listening and when a session ends, to `/sdcard/Android/data/com.teoilie.ascult/files/transcripts/<start time>.txt`.
 
 ## API key
 

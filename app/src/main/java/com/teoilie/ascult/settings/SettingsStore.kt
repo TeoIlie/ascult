@@ -5,6 +5,7 @@ import android.media.MediaRecorder
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -23,6 +24,9 @@ enum class MicSource(val label: String, val description: String, val audioSource
 
 const val MAX_GAIN_DB = 24
 
+/** Transcript text sizes, as multiples of the default body text size. */
+val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f, 1.75f, 2f)
+
 data class AudioSettings(
     val source: MicSource = MicSource.VOICE_RECOGNITION,
     val gainDb: Int = 0,
@@ -36,6 +40,7 @@ private val GAIN_DB = intPreferencesKey("gain_db")
 private val SAVE_RECORDING = booleanPreferencesKey("save_recording")
 private val API_KEY = stringPreferencesKey("soniox_api_key")
 private val DICTIONARY = stringPreferencesKey("dictionary_json")
+private val TEXT_SCALE = floatPreferencesKey("text_scale")
 
 class SettingsStore(context: Context) {
     private val dataStore = context.dataStore
@@ -58,6 +63,12 @@ class SettingsStore(context: Context) {
         dataStore.edit { prefs ->
             if (dictionary == null) prefs.remove(DICTIONARY) else prefs[DICTIONARY] = dictionary.toJson().toString()
         }
+    }
+
+    val textScale: Flow<Float> = dataStore.data.map { it[TEXT_SCALE] ?: 1f }
+
+    suspend fun setTextScale(scale: Float) {
+        dataStore.edit { it[TEXT_SCALE] = scale }
     }
 
     suspend fun updateAudio(transform: (AudioSettings) -> AudioSettings) {

@@ -40,7 +40,7 @@ import kotlin.math.roundToInt
  * fraction through the same segment sits at the centre of both. Reaching the end resumes following.
  */
 @Composable
-fun SyncedPanes(segments: List<Segment>, modifier: Modifier = Modifier) {
+fun SyncedPanes(segments: List<Segment>, textScale: Float, modifier: Modifier = Modifier) {
     val romanian = remember { PaneScroll() }
     val english = remember { PaneScroll() }
     var followLive by remember { mutableStateOf(true) }
@@ -79,9 +79,9 @@ fun SyncedPanes(segments: List<Segment>, modifier: Modifier = Modifier) {
 
     Box(modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Pane("Română", segments, Segment::romanian, romanian, placeholder = "Transcrierea va apărea aici.")
+            Pane("Română", segments, Segment::romanian, romanian, textScale, placeholder = "Transcrierea va apărea aici.")
             HorizontalDivider()
-            Pane("English", segments, Segment::english, english, placeholder = "The translation will appear here.")
+            Pane("English", segments, Segment::english, english, textScale, placeholder = "The translation will appear here.")
         }
         if (!followLive && segments.isNotEmpty()) {
             FilledTonalButton(
@@ -128,8 +128,11 @@ private fun ColumnScope.Pane(
     segments: List<Segment>,
     transcriptOf: (Segment) -> Transcript,
     pane: PaneScroll,
+    textScale: Float,
     placeholder: String,
 ) {
+    val body = MaterialTheme.typography.bodyLarge
+    val textStyle = body.copy(fontSize = body.fontSize * textScale, lineHeight = body.lineHeight * textScale)
     val dimmed = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
     val segmentLabel = SpanStyle(color = MaterialTheme.colorScheme.primary, fontSize = MaterialTheme.typography.labelSmall.fontSize)
     val segmentStarts = mutableListOf<Int>()
@@ -156,7 +159,7 @@ private fun ColumnScope.Pane(
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         Text(
             text,
-            style = MaterialTheme.typography.bodyLarge,
+            style = textStyle,
             modifier = Modifier.padding(top = 8.dp).verticalScroll(pane.scroll),
             onTextLayout = { result: TextLayoutResult ->
                 pane.layout = PaneLayout(

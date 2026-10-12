@@ -56,6 +56,9 @@ private const val RECONNECT_BUFFER_FRAMES = 300 // 30 s
 
 private const val MAX_RECONNECT_DELAY_MS = 10_000L
 
+/** How often the transcript is saved while listening, so little is lost if the process is killed. */
+private const val AUTOSAVE_INTERVAL_MS = 15_000L
+
 data class SessionState(
     val listening: Boolean = false,
     val stopping: Boolean = false,
@@ -79,6 +82,9 @@ class TranslationSession(private val context: Context, private val settings: Set
     private val apiKeySetting = settings.apiKey.stateIn(scope, SharingStarted.Eagerly, "")
     private val stopRequested = MutableStateFlow(false)
     private var sessionJob: Job? = null
+
+    /** Serialises transcript writes so an autosave and the final save never interleave. */
+    private val fileWriter = Dispatchers.IO.limitedParallelism(1)
 
     /** Where the transcript since the last Clear is saved; named when its first session starts. */
     private var transcriptFile: File? = null
@@ -154,6 +160,13 @@ class TranslationSession(private val context: Context, private val settings: Set
             }
         }
 
+        val autosave = launch {
+            while (true) {
+                delay(AUTOSAVE_INTERVAL_MS)
+                saveTranscript()
+            }
+        }
+
         var attempt = 0
         while (true) {
             try {
@@ -173,6 +186,7 @@ class TranslationSession(private val context: Context, private val settings: Set
             if (stopRequested.value) break
         }
         capture.cancel()
+        autosave.cancel()
     }
 
     /** Stops the microphone, then lets Soniox finalise the remaining text before the session closes. */
@@ -197,7 +211,7 @@ class TranslationSession(private val context: Context, private val settings: Set
     private fun saveTranscript() {
         val file = transcriptFile ?: return
         val text = _state.value.segments.toPlainText()
-        scope.launch(Dispatchers.IO) { file.writeText(text + "\n") }
+        scope.launch(fileWriter) { file.writeText(text + "\n") }
     }
 
     /** e.g. recordings/20261012-191500_UNPROCESSED_+12dB.wav in the app's external files directory. */
