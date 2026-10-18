@@ -13,7 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,10 +39,12 @@ class MainActivity : ComponentActivity() {
             val theme by app.settings.theme.collectAsStateWithLifecycle(initialValue = null)
             val dark = theme?.isDark() ?: return@setContent
 
-            // Status and navigation bar icons follow the app's theme, not the phone's.
-            LaunchedEffect(dark) {
+            // Status and navigation bar icons follow the app's theme, not the phone's. A DisposableEffect
+            // applies them with the frame that switches the theme; a LaunchedEffect would lag a frame behind.
+            DisposableEffect(dark) {
                 val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                onDispose {}
             }
 
             AscultTheme(dark) {
