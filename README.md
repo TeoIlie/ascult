@@ -5,7 +5,7 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
 ## Features
 
 - Live Romanian → English: final text in full colour, still-changing text dimmed, Romanian and English panes scrolled in sync and resizable.
-- Tuned for a distant speaker: microphone source picker, software gain, live level waveform, optional WAV recording to compare settings.
+- Tuned for a distant speaker: microphone source picker, software gain, live level meter, optional WAV recording to compare settings.
 - Material 3 Expressive look in your wallpaper's colours, light or dark (or follow the phone), in Google Sans Flex.
 - Keeps listening with the screen off (foreground service with a Stop notification), and keeps the screen awake while the app is open.
 - Survives network drops: audio is buffered for 30 s and sent once the connection is back; stalled connections are detected within ~20 s.
@@ -27,18 +27,18 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
 
 ## Using the app
 
-- **Start / Stop** (the big button at the bottom; a microphone when idle, a square while listening): the first Start asks for microphone and notification permission. Listening continues with the screen off; the notification has a Stop button. After Stop, the app waits briefly for Soniox to finish the last words.
-- **Sections**: each Start adds a new paragraph, so text is kept across Stop/Start. The panes show text only; shared and saved transcripts label each section with its microphone source, gain and start time. **Clear** (the bin button, while stopped) starts a new transcript.
-- **Status line** (above the buttons): the audio settings in use, or what is happening (reconnecting, finishing, an error in red).
-- **Audio settings** (the sliders button, or tap the status line):
+- **Start / Stop** (the button at the top right; a microphone when idle, a square while listening): the first Start asks for microphone and notification permission. Listening continues with the screen off; the notification has a Stop button. After Stop, the app waits briefly for Soniox to finish the last words.
+- **Sections**: each Start adds a new paragraph, so text is kept across Stop/Start. The panes show text only; shared and saved transcripts label each section with its microphone source, gain and start time. **Clear** (in ⋮, while stopped) starts a new transcript.
+- **Status line** (under the title): a small level meter and the audio settings in use, or what is happening (reconnecting, finishing, an error in red).
+- **Audio settings** (tap the status line, or ⋮ → Audio settings):
   - **Microphone source**: Voice recognition (default), Unprocessed, Mic or Camcorder. Each applies different phone processing; which works best for a distant speaker has to be found by ear and by transcript quality. Applies from the next Start.
   - **Gain**: 0 to +24 dB, applied immediately. It raises quiet input but does not reduce background noise.
   - **Save recording**: saves exactly what is sent to Soniox as a WAV named `<time>_<SOURCE>_+<gain>dB.wav`.
-- **Settings** (gear icon):
+- **Settings** (⋮ → Settings):
   - **Theme**: System, Light or Dark (Dark is handy in church even when the phone is light).
   - **Soniox API key**: tap to enter; stored on the phone only (excluded from backups).
   - **Dictionary**: its own screen with expected words, fixed translations (`țarina = field`), context (`domain: Orthodox sermon`) and background text, one entry per line. **Share** exports your edits as JSON so they can be copied into `app/src/main/assets/dictionary.json`; **⋮ → Reset to bundled default** restores the default.
-- **Text size** (the TT icon) opens a − / + stepper; **Share** sends the transcript as plain text.
+- **Text size** (the TT icon) opens a − / + stepper; **⋮ → Share transcript** sends the transcript as plain text.
 - **Divider**: drag the handle between the panes to give one language more room. Drag it nearly to the top or bottom to hide that pane; tap the arrow by its name (or double-tap the handle) to bring it back. The position is remembered.
 - **Scrolling**: both panes follow new text. Scroll either pane to review, and the other stays aligned; **Jump to live** (or scrolling to the end) resumes following.
 - **Reconnecting**: "Reconnecting… audio is kept" in the status line means the app is still recording and will catch up once the network is back. Red text is a real error (for example an invalid API key).

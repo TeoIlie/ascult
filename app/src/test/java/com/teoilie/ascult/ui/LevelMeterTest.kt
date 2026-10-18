@@ -4,7 +4,7 @@ import com.teoilie.ascult.audio.SILENCE_DBFS
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class LevelWaveformTest {
+class LevelMeterTest {
     @Test
     fun `silence is empty and full scale is full`() {
         assertEquals(0f, levelFraction(SILENCE_DBFS), 0f)
