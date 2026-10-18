@@ -141,7 +141,7 @@ private fun TranslationContent(
             textScale = textScale,
             split = paneSplit,
             onSplitChange = onPaneSplit,
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 24.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
         )
     }
 }

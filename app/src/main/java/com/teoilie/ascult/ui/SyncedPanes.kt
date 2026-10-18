@@ -1,21 +1,33 @@
 package com.teoilie.ascult.ui
 
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,8 +37,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,14 +47,25 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -54,6 +77,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.teoilie.ascult.R
 import com.teoilie.ascult.soniox.Segment
@@ -62,8 +86,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlin.math.roundToInt
 
-private val LABEL_HEIGHT = 40.dp
-private val HANDLE_HEIGHT = 32.dp
+private val DIVIDER_HEIGHT = 40.dp
+private val FADE_LENGTH = 32.dp
 
 /** Smallest share a pane keeps while the handle is being dragged. */
 private const val DRAG_MIN = 0.02f
@@ -73,8 +97,9 @@ private const val DRAG_MIN = 0.02f
  * arrives. Scrolling either pane stops following and keeps the other aligned by segment: the same
  * fraction through the same segment sits at the centre of both. Reaching the end resumes following.
  *
- * The handle between them sets [split], the Romanian share of the text height; dragging it near
- * either end collapses that pane to its label. [onSplitChange] gets the settled value to save.
+ * The divider between them carries both labels and a handle that sets [split], the Romanian share
+ * of the text height. Released near either end, the handle hides that pane; [onSplitChange] gets the
+ * settled value to save.
  */
 @Composable
 fun SyncedPanes(
@@ -123,24 +148,32 @@ fun SyncedPanes(
     // Follows the handle while dragging; reset whenever the saved value changes.
     var liveSplit by remember(split) { mutableFloatStateOf(split) }
     var textHeight by remember { mutableIntStateOf(0) }
-    val fixedHeight = with(LocalDensity.current) { (LABEL_HEIGHT * 2 + HANDLE_HEIGHT).toPx() }
+    val dividerHeight = with(LocalDensity.current) { DIVIDER_HEIGHT.toPx() }
     val settle = { value: Float -> liveSplit = value; onSplitChange(value) }
 
+    // While the handle is held: the pane that would hide if it were released now (split 0 or 1), if any.
+    var held by remember { mutableStateOf(false) }
+    val hiding = if (held && liveSplit > 0f && liveSplit < 1f) snapSplit(liveSplit).takeIf { it == 0f || it == 1f } else null
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(held) { if (held) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+    LaunchedEffect(hiding) { if (hiding != null) haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate) }
+
     Box(modifier) {
-        Column(Modifier.fillMaxSize().onSizeChanged { textHeight = (it.height - fixedHeight).roundToInt() }) {
+        Column(Modifier.fillMaxSize().onSizeChanged { textHeight = (it.height - dividerHeight).roundToInt() }) {
             Pane(
-                label = "Română",
-                color = MaterialTheme.colorScheme.primary,
+                label = "Romanian",
                 share = liveSplit,
-                expandIcon = R.drawable.ic_expand_more,
-                onExpand = { settle(0.5f) },
+                hiding = hiding == 0f,
                 segments = segments,
                 transcriptOf = Segment::romanian,
                 pane = romanian,
                 textScale = textScale,
                 placeholder = "Tap the microphone to start. The Romanian transcript appears here.",
             )
-            DividerHandle(
+            Divider(
+                split = liveSplit,
+                held = held,
+                onHeldChange = { held = it },
                 // Panes only collapse on release (snapSplit), so the layout never jumps under the finger.
                 onDrag = { delta ->
                     if (textHeight > 0) liveSplit = (liveSplit + delta / textHeight).coerceIn(DRAG_MIN, 1f - DRAG_MIN)
@@ -150,10 +183,8 @@ fun SyncedPanes(
             )
             Pane(
                 label = "English",
-                color = MaterialTheme.colorScheme.tertiary,
                 share = 1f - liveSplit,
-                expandIcon = R.drawable.ic_expand_less,
-                onExpand = { settle(0.5f) },
+                hiding = hiding == 1f,
                 segments = segments,
                 transcriptOf = Segment::english,
                 pane = english,
@@ -232,83 +263,139 @@ internal fun paneText(segments: List<Segment>, transcriptOf: (Segment) -> Transc
     return PaneText(text, segmentStarts)
 }
 
-/** Label row, then the text taking [share] of the panes' text height; at a share of 0 only the label shows. */
+/**
+ * The text, taking [share] of the panes' text height; nothing at a share of 0. It fades out at an
+ * edge with more text beyond it. While [hiding], it dims under a "Release to hide" hint.
+ */
 @Composable
 private fun ColumnScope.Pane(
     label: String,
-    color: Color,
     share: Float,
-    expandIcon: Int,
-    onExpand: () -> Unit,
+    hiding: Boolean,
     segments: List<Segment>,
     transcriptOf: (Segment) -> Transcript,
     pane: PaneScroll,
     textScale: Float,
     placeholder: String,
 ) {
-    val collapsed = share <= 0f
-    Row(Modifier.fillMaxWidth().height(LABEL_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.titleSmall, color = color)
-        if (collapsed) {
-            IconButton(onClick = onExpand) {
-                Icon(painterResource(expandIcon), contentDescription = "Show $label", tint = color)
+    if (share <= 0f) return
+    val alpha by animateFloatAsState(if (hiding) 0.3f else 1f, label = "hiding")
+    Box(Modifier.weight(share).fillMaxWidth()) {
+        Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }) {
+            if (segments.isEmpty()) {
+                Text(
+                    placeholder,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp),
+                )
+            } else {
+                val body = MaterialTheme.typography.bodyLarge
+                val textStyle = body.copy(fontSize = body.fontSize * textScale, lineHeight = body.lineHeight * textScale)
+                val provisional = SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f))
+                val content = paneText(segments, transcriptOf, provisional)
+                val topFade by animateFloatAsState(if (pane.scroll.canScrollBackward) 1f else 0f, label = "topFade")
+                val bottomFade by animateFloatAsState(if (pane.scroll.canScrollForward) 1f else 0f, label = "bottomFade")
+                Text(
+                    content.text,
+                    style = textStyle,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .fadingEdges({ topFade }, { bottomFade }, FADE_LENGTH)
+                        .verticalScroll(pane.scroll),
+                    onTextLayout = { result: TextLayoutResult ->
+                        pane.layout = PaneLayout(
+                            segmentTops = content.segmentStarts.map { result.getLineTop(result.getLineForOffset(it)) },
+                            height = result.size.height.toFloat(),
+                        )
+                    },
+                )
+            }
+        }
+        if (hiding) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                Text(
+                    "Release to hide $label",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
             }
         }
     }
-    if (collapsed) return
-
-    Box(Modifier.weight(share).fillMaxWidth()) {
-        if (segments.isEmpty()) {
-            Text(
-                placeholder,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp),
-            )
-            return@Box
-        }
-        val body = MaterialTheme.typography.bodyLarge
-        val textStyle = body.copy(fontSize = body.fontSize * textScale, lineHeight = body.lineHeight * textScale)
-        val provisional = SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f))
-        val content = paneText(segments, transcriptOf, provisional)
-        Text(
-            content.text,
-            style = textStyle,
-            modifier = Modifier.fillMaxWidth().verticalScroll(pane.scroll),
-            onTextLayout = { result: TextLayoutResult ->
-                pane.layout = PaneLayout(
-                    segmentTops = content.segmentStarts.map { result.getLineTop(result.getLineForOffset(it)) },
-                    height = result.size.height.toFloat(),
-                )
-            },
-        )
-    }
 }
 
+/** Fades content out over [length] at the top and bottom, by [top] and [bottom] (0 to 1), read when drawing. */
+private fun Modifier.fadingEdges(top: () -> Float, bottom: () -> Float, length: Dp): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val edge = length.toPx().coerceAtMost(size.height / 2)
+            val topFade = top()
+            if (topFade > 0f) {
+                drawRect(
+                    Brush.verticalGradient(listOf(Color.Black.copy(alpha = 1f - topFade), Color.Black), startY = 0f, endY = edge),
+                    size = Size(size.width, edge),
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+            val bottomFade = bottom()
+            if (bottomFade > 0f) {
+                drawRect(
+                    Brush.verticalGradient(
+                        listOf(Color.Black, Color.Black.copy(alpha = 1f - bottomFade)),
+                        startY = size.height - edge,
+                        endY = size.height,
+                    ),
+                    topLeft = Offset(0f, size.height - edge),
+                    size = Size(size.width, edge),
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+        }
+
 /**
- * The bar between the panes: drag to resize, double-tap for an even split. Accessibility actions
- * offer the same without dragging.
+ * The bar between the panes: "Română ↑" and "English ↓" labels on a line, with a handle in the
+ * middle. Drag anywhere on it to resize, double-tap for an even split; a hidden pane's label brings
+ * it back. Accessibility actions offer the same without dragging.
  */
 @Composable
-private fun DividerHandle(onDrag: (Float) -> Unit, onDragStopped: () -> Unit, onSet: (Float) -> Unit) {
-    var dragging by remember { mutableStateOf(false) }
-    val pill by animateColorAsState(
-        if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-        label = "handle",
+private fun Divider(
+    split: Float,
+    held: Boolean,
+    onHeldChange: (Boolean) -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragStopped: () -> Unit,
+    onSet: (Float) -> Unit,
+) {
+    val setHeld by rememberUpdatedState(onHeldChange)
+    val line by animateColorAsState(
+        if (held) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
+        label = "line",
     )
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(HANDLE_HEIGHT)
+            .height(DIVIDER_HEIGHT)
+            // Held from the first touch until every finger lifts; consumes nothing, so dragging and taps still work.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    setHeld(true)
+                    do {
+                        val event = awaitPointerEvent()
+                    } while (event.changes.any { it.pressed })
+                    setHeld(false)
+                }
+            }
             .draggable(
                 state = rememberDraggableState(onDrag),
                 orientation = Orientation.Vertical,
-                onDragStarted = { dragging = true },
-                onDragStopped = {
-                    dragging = false
-                    onDragStopped()
-                },
+                onDragStopped = { onDragStopped() },
             )
             .pointerInput(onSet) { detectTapGestures(onDoubleTap = { onSet(0.5f) }) }
             .semantics {
@@ -321,7 +408,79 @@ private fun DividerHandle(onDrag: (Float) -> Unit, onDragStopped: () -> Unit, on
             },
         contentAlignment = Alignment.Center,
     ) {
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Box(Modifier.size(width = 40.dp, height = 6.dp).background(pill, CircleShape))
+        HorizontalDivider(color = line)
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            val romanianHidden = split <= 0f
+            val englishHidden = split >= 1f
+            DividerLabel(
+                label = "Română",
+                icon = if (romanianHidden) R.drawable.ic_expand_more else R.drawable.ic_arrow_upward,
+                color = MaterialTheme.colorScheme.primary,
+                onShow = if (romanianHidden) ({ onSet(0.5f) }) else null,
+                showLabel = "Show Romanian",
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Spacer(Modifier.weight(1f))
+            Handle(held)
+            Spacer(Modifier.weight(1f))
+            DividerLabel(
+                label = "English",
+                icon = if (englishHidden) R.drawable.ic_expand_less else R.drawable.ic_arrow_downward,
+                color = MaterialTheme.colorScheme.tertiary,
+                onShow = if (englishHidden) ({ onSet(0.5f) }) else null,
+                showLabel = "Show English",
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
+    }
+}
+
+/** A pane's name and arrow, on the background so it cuts the line; tappable while that pane is hidden. */
+@Composable
+private fun DividerLabel(
+    label: String,
+    @DrawableRes icon: Int,
+    color: Color,
+    onShow: (() -> Unit)?,
+    showLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    val background = MaterialTheme.colorScheme.background
+    Box(modifier.fillMaxHeight().background(background), contentAlignment = Alignment.Center) {
+        Row(
+            modifier = Modifier
+                .clip(CircleShape)
+                .then(if (onShow != null) Modifier.clickable(onClickLabel = showLabel, onClick = onShow) else Modifier)
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = color)
+            Icon(painterResource(icon), contentDescription = null, Modifier.size(16.dp), tint = color)
+        }
+    }
+}
+
+/** A small grey pill with ↕ at rest; held, it grows into the accent colour with a halo and ↑ ↓ arrows. */
+@Composable
+private fun Handle(held: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val width by animateDpAsState(if (held) 56.dp else 40.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "width")
+    val height by animateDpAsState(if (held) 28.dp else 20.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "height")
+    val halo by animateFloatAsState(if (held) 0.18f else 0f, label = "halo")
+    val container by animateColorAsState(if (held) colors.primary else colors.surfaceContainerHighest, label = "container")
+    val content by animateColorAsState(if (held) colors.onPrimary else colors.outline, label = "content")
+    Box(contentAlignment = Alignment.Center) {
+        Box(Modifier.background(colors.primary.copy(alpha = halo), CircleShape).padding(6.dp)) {
+            Box(Modifier.size(width, height).background(container, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.ic_unfold_more), contentDescription = null, Modifier.size(16.dp), tint = content)
+            }
+        }
+        AnimatedVisibility(held, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.offset(y = (-26).dp)) {
+            Icon(painterResource(R.drawable.ic_expand_less), contentDescription = null, Modifier.size(14.dp), tint = colors.primary)
+        }
+        AnimatedVisibility(held, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.offset(y = 26.dp)) {
+            Icon(painterResource(R.drawable.ic_expand_more), contentDescription = null, Modifier.size(14.dp), tint = colors.primary)
+        }
     }
 }

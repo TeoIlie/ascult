@@ -39,8 +39,8 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
   - **Soniox API key**: tap to enter; stored on the phone only (excluded from backups).
   - **Dictionary**: its own screen with expected words, fixed translations (`țarina = field`), context (`domain: Orthodox sermon`) and background text, one entry per line. **Share** exports your edits as JSON so they can be copied into `app/src/main/assets/dictionary.json`; **⋮ → Reset to bundled default** restores the default.
 - **Text size** (the TT icon) opens a − / + stepper; **⋮ → Share transcript** sends the transcript as plain text.
-- **Divider**: drag the handle between the panes to give one language more room. Drag it nearly to the top or bottom to hide that pane; tap the arrow by its name (or double-tap the handle) to bring it back. The position is remembered.
-- **Scrolling**: both panes follow new text. Scroll either pane to review, and the other stays aligned; **Jump to live** (or scrolling to the end) resumes following.
+- **Divider**: the line between the panes carries their names ("Română ↑", "English ↓") and a handle. Drag it to give one language more room; the handle lights up and the phone ticks when you touch it. Dragged nearly to the top or bottom, that pane dims with "Release to hide…" and a firmer tick; letting go hides it. Tap the hidden pane's name (or double-tap the divider) to bring it back. The position is remembered.
+- **Scrolling**: both panes follow new text, which fades out at a pane's edge where there is more to scroll. Scroll either pane to review, and the other stays aligned; **Jump to live** (or scrolling to the end) resumes following.
 - **Reconnecting**: "Reconnecting… audio is kept" in the status line means the app is still recording and will catch up once the network is back. Red text is a real error (for example an invalid API key).
 
 Transcripts (saved every 15 s while listening and at Stop) and recordings are on the phone in `/sdcard/Android/data/com.teoilie.ascult/files/`.

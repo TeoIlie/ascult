@@ -67,7 +67,7 @@ Kotlin sources: `app/src/main/java/com/teoilie/ascult/`.
 | `session/TranslationService.kt` | Microphone foreground service, Stop notification, wake lock (4 h cap). |
 | `settings/SettingsStore.kt` | DataStore keys and flows; `MicSource`, `ThemeMode`. |
 | `ui/TranslationScreen.kt` | Main screen: top bar (status line, ⋮ menu, Start/Stop), panes. |
-| `ui/SyncedPanes.kt` | Text-only panes (`paneText`), live follow, segment-aligned scroll sync (`PaneLayout`), draggable divider (`snapSplit`). |
+| `ui/SyncedPanes.kt` | Text-only panes (`paneText`) with fading edges, live follow, segment-aligned scroll sync (`PaneLayout`), divider with labels, handle, haptics and hide preview (`snapSplit`). |
 | `ui/LevelMeter.kt` | Mini input level meter. |
 | `ui/AudioSettingsSheet.kt` | Source, gain, recording sheet. |
 | `ui/SettingsScreen.kt`, `ui/DictionaryScreen.kt`, `ui/SettingsViewModel.kt` | Grouped settings (theme, API key dialog, about); dictionary editor (`DictionaryText` ↔ `Dictionary`). |
