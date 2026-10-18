@@ -27,10 +27,10 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
 
 ## Using the app
 
-- **Start / Stop** (the button at the top right; a microphone when idle, a square while listening): the first Start asks for microphone and notification permission. Listening continues with the screen off; the notification has a Stop button. After Stop, the app waits briefly for Soniox to finish the last words.
+- **Start / Stop** (the button at the bottom right; a microphone when idle, a square while listening): the first Start asks for microphone and notification permission. Listening continues with the screen off; the notification has a Stop button. After Stop, the app waits briefly for Soniox to finish the last words.
 - **Sections**: each Start adds a new paragraph, so text is kept across Stop/Start. The panes show text only; shared and saved transcripts label each section with its microphone source, gain and start time. **Clear** (in ⋮, while stopped) starts a new transcript.
-- **Status line** (under the title): a small level meter and the audio settings in use, or what is happening (reconnecting, finishing, an error in red).
-- **Audio settings** (tap the status line, or ⋮ → Audio settings):
+- **Status** (bottom left): a small level meter, what is happening (Ready, Listening, Recording, Reconnecting, Finishing, or an error in red) and the audio settings in use.
+- **Audio settings** (tap the status, or ⋮ → Audio settings):
   - **Microphone source**: Voice recognition (default), Unprocessed, Mic or Camcorder. Each applies different phone processing; which works best for a distant speaker has to be found by ear and by transcript quality. Applies from the next Start.
   - **Gain**: 0 to +24 dB, applied immediately. It raises quiet input but does not reduce background noise.
   - **Save recording**: saves exactly what is sent to Soniox as a WAV named `<time>_<SOURCE>_+<gain>dB.wav`.

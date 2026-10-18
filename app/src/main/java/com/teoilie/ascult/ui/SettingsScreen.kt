@@ -1,22 +1,17 @@
 package com.teoilie.ascult.ui
 
-import android.content.Context
-import android.content.Intent
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,15 +70,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: 
         },
     ) { padding ->
         val form = viewModel.form ?: return@Scaffold
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
+        SettingsColumn(Modifier.fillMaxSize().padding(padding)) {
             SettingsGroup("Appearance") {
                 ThemeSetting(theme, viewModel::setTheme)
             }
@@ -101,7 +88,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: 
                     shapes = ListItemDefaults.segmentedShapes(1, 2),
                     leadingContent = { SettingIcon(R.drawable.ic_book) },
                     trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-                    supportingContent = { Text(if (form.dictionaryIsDefault) "Bundled default" else "Edited in the app") },
+                    supportingContent = { Text(form.dictionarySource) },
                 ) { Text("Dictionary") }
             }
             SettingsGroup("About") {
@@ -120,27 +107,6 @@ fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: 
             onSave = { viewModel.setApiKey(it); editingApiKey = false },
             onDismiss = { editingApiKey = false },
         )
-    }
-}
-
-@Composable
-fun BackButton(onBack: () -> Unit) {
-    IconButton(onClick = onBack) {
-        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
-    }
-}
-
-/** A titled group of segmented list items. */
-@Composable
-internal fun SettingsGroup(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-        )
-        content()
     }
 }
 
@@ -187,7 +153,7 @@ private fun ThemeSetting(theme: ThemeMode, onChange: (ThemeMode) -> Unit) {
                     },
                 ) {
                     if (theme == mode) {
-                        Icon(painterResource(R.drawable.ic_check), contentDescription = null, Modifier.size(18.dp))
+                        Icon(painterResource(R.drawable.ic_check), contentDescription = null, Modifier.size(ToggleButtonDefaults.IconSize))
                         Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
                     }
                     Text(mode.label)
@@ -227,9 +193,4 @@ private fun ApiKeyDialog(initial: String, onSave: (String) -> Unit, onDismiss: (
         confirmButton = { TextButton(onClick = { onSave(key) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
-}
-
-fun share(context: Context, title: String, text: String) {
-    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
-    context.startActivity(Intent.createChooser(send, title))
 }

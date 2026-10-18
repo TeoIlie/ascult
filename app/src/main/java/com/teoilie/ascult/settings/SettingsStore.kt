@@ -34,7 +34,13 @@ data class AudioSettings(
     val source: MicSource = MicSource.VOICE_RECOGNITION,
     val gainDb: Int = 0,
     val saveRecording: Boolean = false,
-)
+) {
+    /** "Voice recognition · +12 dB", as shown in the status and segment labels. */
+    val summary: String get() = "${source.label} · +$gainDb dB"
+}
+
+/** Pane split that gives Romanian and English the same height. */
+const val EVEN_SPLIT = 0.5f
 
 private val Context.dataStore by preferencesDataStore("settings")
 
@@ -76,16 +82,14 @@ class SettingsStore(context: Context) {
         dataStore.edit { it[TEXT_SCALE] = scale }
     }
 
-    val theme: Flow<ThemeMode> = dataStore.data.map { prefs ->
-        prefs[THEME]?.let { name -> ThemeMode.entries.find { it.name == name } } ?: ThemeMode.SYSTEM
-    }
+    val theme: Flow<ThemeMode> = dataStore.data.map { it.enum(THEME, ThemeMode.SYSTEM) }
 
     suspend fun setTheme(mode: ThemeMode) {
         dataStore.edit { it[THEME] = mode.name }
     }
 
     /** Romanian pane's share of the panes' height: 0 collapses it, 1 collapses English. */
-    val paneSplit: Flow<Float> = dataStore.data.map { (it[PANE_SPLIT] ?: 0.5f).coerceIn(0f, 1f) }
+    val paneSplit: Flow<Float> = dataStore.data.map { (it[PANE_SPLIT] ?: EVEN_SPLIT).coerceIn(0f, 1f) }
 
     suspend fun setPaneSplit(split: Float) {
         dataStore.edit { it[PANE_SPLIT] = split.coerceIn(0f, 1f) }
@@ -101,8 +105,12 @@ class SettingsStore(context: Context) {
     }
 }
 
+/** An enum stored by name, or [default] if missing or no longer a valid name. */
+private inline fun <reified E : Enum<E>> Preferences.enum(key: Preferences.Key<String>, default: E): E =
+    this[key]?.let { name -> enumValues<E>().find { it.name == name } } ?: default
+
 private fun Preferences.toAudioSettings() = AudioSettings(
-    source = this[SOURCE]?.let { name -> MicSource.entries.find { it.name == name } } ?: MicSource.VOICE_RECOGNITION,
+    source = enum(SOURCE, MicSource.VOICE_RECOGNITION),
     gainDb = (this[GAIN_DB] ?: 0).coerceIn(0, MAX_GAIN_DB),
     saveRecording = this[SAVE_RECORDING] ?: false,
 )

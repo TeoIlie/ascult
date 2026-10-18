@@ -1,7 +1,6 @@
 package com.teoilie.ascult.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -20,10 +18,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -36,7 +30,6 @@ import com.teoilie.ascult.R
 @Composable
 fun DictionaryScreen(onBack: () -> Unit, viewModel: SettingsViewModel = viewModel()) {
     val context = LocalContext.current
-    var menuOpen by remember { mutableStateOf(false) }
     val form = viewModel.form
     Scaffold(
         topBar = {
@@ -46,7 +39,7 @@ fun DictionaryScreen(onBack: () -> Unit, viewModel: SettingsViewModel = viewMode
                         Text("Dictionary")
                         if (form != null) {
                             Text(
-                                if (form.dictionaryIsDefault) "Bundled default" else "Edited in the app",
+                                form.dictionarySource,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -58,20 +51,15 @@ fun DictionaryScreen(onBack: () -> Unit, viewModel: SettingsViewModel = viewMode
                     IconButton(onClick = { share(context, "Ascult dictionary", viewModel.dictionaryJson()) }) {
                         Icon(painterResource(R.drawable.ic_share), contentDescription = "Share as JSON")
                     }
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = "More")
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Reset to bundled default") },
-                                enabled = form?.dictionaryIsDefault == false,
-                                onClick = {
-                                    viewModel.resetDictionary()
-                                    menuOpen = false
-                                },
-                            )
-                        }
+                    IconMenu(R.drawable.ic_more_vert, "More") { close ->
+                        DropdownMenuItem(
+                            text = { Text("Reset to bundled default") },
+                            enabled = form?.dictionaryIsDefault == false,
+                            onClick = {
+                                viewModel.resetDictionary()
+                                close()
+                            },
+                        )
                     }
                 },
             )

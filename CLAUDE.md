@@ -66,10 +66,12 @@ Kotlin sources: `app/src/main/java/com/teoilie/ascult/`.
 | `session/SessionFiles.kt` | Recording/transcript files in external storage; serialised saving. |
 | `session/TranslationService.kt` | Microphone foreground service, Stop notification, wake lock (4 h cap). |
 | `settings/SettingsStore.kt` | DataStore keys and flows; `MicSource`, `ThemeMode`. |
-| `ui/TranslationScreen.kt` | Main screen: top bar (status line, ⋮ menu, Start/Stop), panes. |
-| `ui/SyncedPanes.kt` | Text-only panes (`paneText`) with fading edges, live follow, segment-aligned scroll sync (`PaneLayout`), divider with labels, handle, haptics and hide preview (`snapSplit`). |
+| `ui/TranslationScreen.kt` | Main screen: panes, docked bottom bar (status, ⋮ menu, Start/Stop); `statusText`. |
+| `ui/SyncedPanes.kt` | Text-only panes (`paneText`, `PaneSide`) with fading edges, live follow, segment-aligned scroll sync (`PaneLayout`), haptics and hide preview. |
+| `ui/PaneDivider.kt` | Divider between the panes: labels, handle, drag/double-tap/accessibility, `snapSplit`. |
 | `ui/LevelMeter.kt` | Mini input level meter. |
 | `ui/AudioSettingsSheet.kt` | Source, gain, recording sheet. |
+| `ui/Components.kt` | Shared bits: `share()`, `BackButton`, `IconMenu`, `SettingsColumn`/`SettingsGroup`. |
 | `ui/SettingsScreen.kt`, `ui/DictionaryScreen.kt`, `ui/SettingsViewModel.kt` | Grouped settings (theme, API key dialog, about); dictionary editor (`DictionaryText` ↔ `Dictionary`). |
 | `ui/TranslationViewModel.kt`, `ui/Theme.kt` | Main screen state/actions; Material 3 Expressive theme with wallpaper colours and Google Sans Flex. |
 | `app/src/main/assets/dictionary.json` | Default dictionary, shared with `tools/stream_test.py`. |

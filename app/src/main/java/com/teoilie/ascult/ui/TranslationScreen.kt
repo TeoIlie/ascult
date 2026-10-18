@@ -14,14 +14,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -55,11 +53,23 @@ import com.teoilie.ascult.R
 import com.teoilie.ascult.session.Phase
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.settings.AudioSettings
+import com.teoilie.ascult.settings.EVEN_SPLIT
 import com.teoilie.ascult.settings.TEXT_SCALES
 import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.Transcript
 import com.teoilie.ascult.soniox.toPlainText
 import kotlin.math.roundToInt
+
+/** What the bottom bar's controls do. Built once per screen, so the bar doesn't recompose for new lambdas. */
+private class BarActions(
+    val start: () -> Unit,
+    val stop: () -> Unit,
+    val clear: () -> Unit,
+    val share: () -> Unit,
+    val changeTextScale: (steps: Int) -> Unit,
+    val openAudioSettings: () -> Unit,
+    val openSettings: () -> Unit,
+)
 
 @Composable
 fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewModel = viewModel()) {
@@ -81,26 +91,25 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
         viewModel.start() // reports the error itself if the microphone was denied
     }
 
-    TranslationContent(
-        state = state,
-        audioSettings = audioSettings,
-        textScale = textScale,
-        paneSplit = paneSplit,
-        onPaneSplit = viewModel::setPaneSplit,
-        onTextScale = viewModel::changeTextScale,
-        onStart = {
-            // The microphone is required; notifications only make the session's Stop button visible.
-            val missing = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS).filter {
-                ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-            }
-            if (missing.isEmpty()) viewModel.start() else permissionLauncher.launch(missing.toTypedArray())
-        },
-        onStop = viewModel::stop,
-        onClear = viewModel::clear,
-        onShare = { share(context, "Ascult transcript", state.segments.toPlainText()) },
-        onAudioSettings = { showAudioSettings = true },
-        onOpenSettings = onOpenSettings,
-    )
+    val actions = remember(viewModel, context, permissionLauncher, onOpenSettings) {
+        BarActions(
+            start = {
+                // The microphone is required; notifications only make the session's Stop button visible.
+                val missing = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS).filter {
+                    ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+                }
+                if (missing.isEmpty()) viewModel.start() else permissionLauncher.launch(missing.toTypedArray())
+            },
+            stop = viewModel::stop,
+            clear = viewModel::clear,
+            share = { share(context, "Ascult transcript", viewModel.state.value.segments.toPlainText()) },
+            changeTextScale = viewModel::changeTextScale,
+            openAudioSettings = { showAudioSettings = true },
+            openSettings = onOpenSettings,
+        )
+    }
+
+    TranslationContent(state, audioSettings, textScale, paneSplit, viewModel::setPaneSplit, actions)
 
     if (showAudioSettings) {
         AudioSettingsSheet(
@@ -112,7 +121,7 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
     }
 }
 
-/** Top bar with status and controls; Romanian and English panes with a draggable divider fill the rest. */
+/** Romanian and English panes with a draggable divider; status and controls in a bar docked at the bottom. */
 @Composable
 private fun TranslationContent(
     state: SessionState,
@@ -120,155 +129,136 @@ private fun TranslationContent(
     textScale: Float,
     paneSplit: Float,
     onPaneSplit: (Float) -> Unit,
-    onTextScale: (steps: Int) -> Unit,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-    onClear: () -> Unit,
-    onShare: () -> Unit,
-    onAudioSettings: () -> Unit,
-    onOpenSettings: () -> Unit,
+    actions: BarActions,
 ) {
     Scaffold(
-        topBar = {
-            TopBar(
-                state, audioSettings, textScale, onTextScale,
-                onStart, onStop, onClear, onShare, onAudioSettings, onOpenSettings,
-            )
-        },
+        bottomBar = { BottomBar(state, audioSettings, textScale, actions) },
     ) { padding ->
         SyncedPanes(
             segments = state.segments,
             textScale = textScale,
             split = paneSplit,
             onSplitChange = onPaneSplit,
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
         )
     }
 }
 
-/** Title with the status line under it; text size, ⋮ menu and Start/Stop on the right. */
+/** Status on the left (opens the audio settings); text size, ⋮ menu and Start/Stop on the right, in thumb reach. */
 @Composable
-private fun TopBar(
-    state: SessionState,
-    audioSettings: AudioSettings,
-    textScale: Float,
-    onTextScale: (steps: Int) -> Unit,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-    onClear: () -> Unit,
-    onShare: () -> Unit,
-    onAudioSettings: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(start = 24.dp, end = 16.dp, top = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun BottomBar(state: SessionState, audioSettings: AudioSettings, textScale: Float, actions: BarActions) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text("Ascult", style = MaterialTheme.typography.titleLarge)
-            StatusLine(state, audioSettings, onAudioSettings)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusBlock(state, audioSettings, actions.openAudioSettings, Modifier.weight(1f))
+            TextSizeMenu(textScale, actions.changeTextScale)
+            OverflowMenu(
+                canShare = state.segments.isNotEmpty(),
+                canClear = !state.listening && state.segments.isNotEmpty(),
+                actions = actions,
+            )
+            StartStopButton(state.phase, onStart = actions.start, onStop = actions.stop, Modifier.padding(start = 6.dp))
         }
-        TextSizeButton(textScale, onTextScale)
-        OverflowMenu(
-            canShare = state.segments.isNotEmpty(),
-            canClear = !state.listening && state.segments.isNotEmpty(),
-            onShare = onShare,
-            onClear = onClear,
-            onAudioSettings = onAudioSettings,
-            onOpenSettings = onOpenSettings,
-        )
-        StartStopButton(state.phase, onStart, onStop, Modifier.padding(start = 4.dp))
     }
 }
 
-/**
- * Level meter and one line of status: an error, reconnecting or finishing, else the audio
- * settings in use. Tapping it opens the audio settings.
- */
+/** The bar's two lines of status: what is happening, and the audio settings in use (or the error). */
+internal data class StatusText(val title: String, val detail: String, val isError: Boolean = false)
+
+internal fun statusText(state: SessionState, audio: AudioSettings): StatusText = when {
+    state.error != null -> StatusText("Error", state.error, isError = true)
+    state.phase == Phase.RECONNECTING -> StatusText("Reconnecting…", "Audio is kept and sent once back")
+    state.phase == Phase.STOPPING -> StatusText("Finishing…", audio.summary)
+    state.phase == Phase.LISTENING && state.recording != null -> StatusText("Recording", audio.summary)
+    state.phase == Phase.LISTENING -> StatusText("Listening", audio.summary)
+    audio.saveRecording -> StatusText("Ready", "${audio.summary} · Recording on")
+    else -> StatusText("Ready", audio.summary)
+}
+
+/** Level meter and [statusText]; tapping it opens the audio settings. */
 @Composable
-private fun StatusLine(state: SessionState, audioSettings: AudioSettings, onClick: () -> Unit) {
-    val gain = "+${audioSettings.gainDb} dB"
-    val text = when {
-        state.error != null -> state.error
-        state.phase == Phase.RECONNECTING -> "Reconnecting…"
-        state.phase == Phase.STOPPING -> "Finishing…"
-        state.phase == Phase.LISTENING && state.recording != null -> "Recording · $gain"
-        state.phase == Phase.LISTENING -> "Listening · $gain"
-        else -> "${audioSettings.source.label} · $gain"
-    }
-    val color = if (state.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+private fun StatusBlock(state: SessionState, audioSettings: AudioSettings, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val status = statusText(state, audioSettings)
+    val colors = MaterialTheme.colorScheme
     Row(
-        modifier = Modifier
-            .heightIn(min = 32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClickLabel = "Audio settings", onClick = onClick),
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClickLabel = "Audio settings", onClick = onClick)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (state.phase == Phase.LISTENING) {
-            Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.error, CircleShape))
-        }
         MiniLevelMeter(state.levelDb, listening = state.phase == Phase.LISTENING)
-        Text(text, style = MaterialTheme.typography.bodySmall, color = color, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (state.phase == Phase.LISTENING) {
+                    Box(Modifier.size(8.dp).background(colors.error, CircleShape))
+                }
+                Text(
+                    status.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (status.isError) colors.error else colors.onSurface,
+                )
+            }
+            Text(
+                status.detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (status.isError) colors.error else colors.onSurfaceVariant,
+                maxLines = if (status.isError) 2 else 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
 /** Share, Clear, Audio settings and Settings. */
 @Composable
-private fun OverflowMenu(
-    canShare: Boolean,
-    canClear: Boolean,
-    onShare: () -> Unit,
-    onClear: () -> Unit,
-    onAudioSettings: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    @Composable
-    fun Item(label: String, @DrawableRes icon: Int, enabled: Boolean = true, onClick: () -> Unit) = DropdownMenuItem(
-        text = { Text(label) },
-        leadingIcon = { Icon(painterResource(icon), contentDescription = null) },
-        enabled = enabled,
-        onClick = {
-            open = false
-            onClick()
-        },
-    )
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = "More")
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Item("Share transcript", R.drawable.ic_share, enabled = canShare, onClick = onShare)
-            Item("Clear transcript", R.drawable.ic_delete, enabled = canClear, onClick = onClear)
-            Item("Audio settings", R.drawable.ic_tune, onClick = onAudioSettings)
-            Item("Settings", R.drawable.ic_settings, onClick = onOpenSettings)
-        }
+private fun OverflowMenu(canShare: Boolean, canClear: Boolean, actions: BarActions) {
+    IconMenu(R.drawable.ic_more_vert, "More") { close ->
+        @Composable
+        fun Item(label: String, @DrawableRes icon: Int, enabled: Boolean = true, onClick: () -> Unit) = DropdownMenuItem(
+            text = { Text(label) },
+            leadingIcon = { Icon(painterResource(icon), contentDescription = null) },
+            enabled = enabled,
+            onClick = {
+                close()
+                onClick()
+            },
+        )
+        Item("Share transcript", R.drawable.ic_share, enabled = canShare, onClick = actions.share)
+        Item("Clear transcript", R.drawable.ic_delete, enabled = canClear, onClick = actions.clear)
+        Item("Audio settings", R.drawable.ic_tune, onClick = actions.openAudioSettings)
+        Item("Settings", R.drawable.ic_settings, onClick = actions.openSettings)
     }
 }
 
-/** Opens a small − size + stepper over [TEXT_SCALES]. */
+/** A small − size + stepper over [TEXT_SCALES]. */
 @Composable
-private fun TextSizeButton(textScale: Float, onTextScale: (steps: Int) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(painterResource(R.drawable.ic_text_size), contentDescription = "Text size")
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { onTextScale(-1) }, enabled = textScale > TEXT_SCALES.first()) {
-                    Icon(painterResource(R.drawable.ic_remove), contentDescription = "Smaller text")
-                }
-                Text(
-                    "${(textScale * 100).roundToInt()}%",
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.width(64.dp),
-                )
-                IconButton(onClick = { onTextScale(1) }, enabled = textScale < TEXT_SCALES.last()) {
-                    Icon(painterResource(R.drawable.ic_add), contentDescription = "Larger text")
-                }
+private fun TextSizeMenu(textScale: Float, onTextScale: (steps: Int) -> Unit) {
+    IconMenu(R.drawable.ic_text_size, "Text size") {
+        Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { onTextScale(-1) }, enabled = textScale > TEXT_SCALES.first()) {
+                Icon(painterResource(R.drawable.ic_remove), contentDescription = "Smaller text")
+            }
+            Text(
+                "${(textScale * 100).roundToInt()}%",
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.width(64.dp),
+            )
+            IconButton(onClick = { onTextScale(1) }, enabled = textScale < TEXT_SCALES.last()) {
+                Icon(painterResource(R.drawable.ic_add), contentDescription = "Larger text")
             }
         }
     }
@@ -280,7 +270,7 @@ private fun TextSizeButton(textScale: Float, onTextScale: (steps: Int) -> Unit) 
 private fun StartStopButton(phase: Phase, onStart: () -> Unit, onStop: () -> Unit, modifier: Modifier = Modifier) {
     val idle = phase == Phase.IDLE
     val corner by animateDpAsState(
-        if (idle) 24.dp else 14.dp,
+        if (idle) 28.dp else 18.dp,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "corner",
     )
@@ -290,14 +280,17 @@ private fun StartStopButton(phase: Phase, onStart: () -> Unit, onStop: () -> Uni
         shape = RoundedCornerShape(corner),
         color = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary,
-        modifier = modifier.size(width = 72.dp, height = 48.dp),
+        modifier = modifier.size(width = 80.dp, height = 56.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            when (phase) {
-                Phase.IDLE -> Icon(painterResource(R.drawable.ic_mic), contentDescription = "Start", Modifier.size(24.dp))
-                Phase.LISTENING, Phase.RECONNECTING ->
-                    Icon(painterResource(R.drawable.ic_stop), contentDescription = "Stop", Modifier.size(24.dp))
-                Phase.STOPPING -> LoadingIndicator(Modifier.size(32.dp), color = MaterialTheme.colorScheme.onPrimary)
+            if (phase == Phase.STOPPING) {
+                LoadingIndicator(Modifier.size(36.dp), color = MaterialTheme.colorScheme.onPrimary)
+            } else {
+                Icon(
+                    painterResource(if (idle) R.drawable.ic_mic else R.drawable.ic_stop),
+                    contentDescription = if (idle) "Start" else "Stop",
+                    modifier = Modifier.size(26.dp),
+                )
             }
         }
     }
@@ -317,10 +310,8 @@ private fun TranslationContentPreview() {
             ),
         ),
     )
+    val actions = BarActions(start = {}, stop = {}, clear = {}, share = {}, changeTextScale = {}, openAudioSettings = {}, openSettings = {})
     AscultTheme(dark = true) {
-        TranslationContent(
-            state, AudioSettings(), textScale = 1f, paneSplit = 0.5f, onPaneSplit = {}, onTextScale = {},
-            onStart = {}, onStop = {}, onClear = {}, onShare = {}, onAudioSettings = {}, onOpenSettings = {},
-        )
+        TranslationContent(state, AudioSettings(), textScale = 1f, paneSplit = EVEN_SPLIT, onPaneSplit = {}, actions = actions)
     }
 }

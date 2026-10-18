@@ -111,7 +111,7 @@ class TranslationSession(private val context: Context, private val settings: Set
         val audioSettings = settings.audio.first()
         val recording = if (audioSettings.saveRecording) files.newRecording(audioSettings) else null
         files.startTranscriptIfNeeded()
-        val label = "${audioSettings.source.label} · +${audioSettings.gainDb} dB · ${timestamp("HH:mm")}"
+        val label = "${audioSettings.summary} · ${timestamp("HH:mm")}"
 
         stopRequested.value = false
         _state.update { SessionState(Phase.LISTENING, recording = recording, segments = it.segments + Segment(label)) }

@@ -54,7 +54,10 @@ data class SettingsForm(
     val dictionaryIsDefault: Boolean,
     /** The bundled dictionary, for Reset and for recognising edits that match it. */
     val defaultDictionary: Dictionary,
-)
+) {
+    /** Where the dictionary in use comes from, as shown in Settings and on the dictionary screen. */
+    val dictionarySource: String get() = if (dictionaryIsDefault) "Bundled default" else "Edited in the app"
+}
 
 /** Edits are saved as they are typed; the form keeps its own text so typing is never interrupted. */
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {

@@ -4,12 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
@@ -35,19 +32,11 @@ fun AudioSettingsSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            SettingsGroup("Microphone source") {
-                if (listening) {
-                    Text(
-                        "Source and recording changes apply from the next Start.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-                    )
-                }
+        SettingsColumn(Modifier.fillMaxWidth()) {
+            SettingsGroup(
+                "Microphone source",
+                note = if (listening) "Source and recording changes apply from the next Start." else null,
+            ) {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                     MicSource.entries.forEachIndexed { index, source ->
                         SegmentedListItem(
