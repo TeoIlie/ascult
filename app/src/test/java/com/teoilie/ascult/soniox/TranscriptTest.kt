@@ -42,6 +42,21 @@ class TranscriptTest {
     }
 
     @Test
+    fun `Claude English accumulates in the last segment and is shown until it fails`() {
+        val earlier = Segment("a", Transcript("vechi"), Transcript("old"))
+        val current = Segment("b", Transcript("Amin. Doamne miluiește."), Transcript("Amen. Lord", " have mercy"), ClaudeText())
+        val segments = listOf(earlier, current)
+
+        val translated = segments.withClaudeEnglish("Amen.", upTo = 5).withClaudeEnglish("Lord, have mercy.", upTo = 23)
+
+        assertEquals(earlier, translated[0])
+        assertEquals(ClaudeText("Amen. Lord, have mercy.", translatedUpTo = 23), translated[1].claude)
+        assertEquals(Transcript("Amen. Lord, have mercy."), translated[1].shownEnglish)
+        assertEquals(current.english, translated.withClaudeFailed()[1].shownEnglish)
+        assertEquals(earlier.english, earlier.shownEnglish)
+    }
+
+    @Test
     fun `plain text lists each segment with its label`() {
         val segments = listOf(
             Segment("Voice recognition · +0 dB · 19:42", Transcript(" Amin.", ""), Transcript(" Amen.", "")),
@@ -52,6 +67,21 @@ class TranscriptTest {
             "[Voice recognition · +0 dB · 19:42]\nRO: Amin.\nEN: Amen.\n\n" +
                 "[Unprocessed · +6 dB · 19:50]\nRO: Doamne miluiește\nEN: Lord",
             segments.toPlainText(),
+        )
+    }
+
+    @Test
+    fun `plain text keeps Soniox English alongside Claude's`() {
+        val segment = Segment(
+            "Mic · +0 dB · Claude · 20:00",
+            Transcript("Amin. Doamne", " miluiește"),
+            Transcript(" Amen. Lord", ""),
+            ClaudeText("Amen.", translatedUpTo = 5),
+        )
+
+        assertEquals(
+            "[Mic · +0 dB · Claude · 20:00]\nRO: Amin. Doamne miluiește\nEN: Amen.\nEN (Soniox): Amen. Lord",
+            listOf(segment).toPlainText(),
         )
     }
 }

@@ -72,7 +72,7 @@ internal enum class PaneSide(
     val placeholder: String,
 ) {
     ROMANIAN("Romanian", "Română", 0f, Segment::romanian, "Tap the microphone to start. The Romanian transcript appears here."),
-    ENGLISH("English", "English", 1f, Segment::english, "The English translation appears here."),
+    ENGLISH("English", "English", 1f, Segment::shownEnglish, "The English translation appears here."),
     ;
 
     /** This pane's share of the text height for a given split (the Romanian share). */
