@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
@@ -33,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -46,6 +49,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
@@ -59,6 +63,12 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlin.math.roundToInt
 
 private val FADE_LENGTH = 32.dp
+
+/** Enough of Soniox's latest English to fill the live caption's two lines at any text size. */
+private const val CAPTION_CHARS = 300
+
+/** The live caption's text size relative to the panes' text. */
+private const val CAPTION_SCALE = 0.85f
 
 /** Smallest share a pane keeps while the handle is being dragged. */
 private const val DRAG_MIN = 0.02f
@@ -92,10 +102,14 @@ internal fun PaneSide.color(): Color = when (this) {
  *
  * The [PaneDivider] between them sets [split], the Romanian share of the text height. Released near
  * either end, the handle hides that pane; [onSplitChange] gets the settled value to save.
+ *
+ * While [listening] in Claude mode, a dimmed caption under the English shows Soniox's latest
+ * English, so there is something to read between Claude's sentences.
  */
 @Composable
 fun SyncedPanes(
     segments: List<Segment>,
+    listening: Boolean,
     textScale: Float,
     split: Float,
     onSplitChange: (Float) -> Unit,
@@ -150,7 +164,15 @@ fun SyncedPanes(
 
     @Composable
     fun ColumnScope.PaneFor(side: PaneSide) =
-        Pane(side, side.share(liveSplit), hiding = hiding == side, segments, scrolls.getValue(side), textScale)
+        Pane(
+            side,
+            side.share(liveSplit),
+            hiding = hiding == side,
+            segments,
+            caption = if (side == PaneSide.ENGLISH) liveCaption(segments, listening) else null,
+            scrolls.getValue(side),
+            textScale,
+        )
 
     Box(modifier) {
         Column(Modifier.fillMaxSize().onSizeChanged { textHeight = (it.height - dividerHeight).roundToInt() }) {
@@ -233,8 +255,25 @@ internal fun paneText(segments: List<Segment>, transcriptOf: (Segment) -> Transc
 }
 
 /**
+ * Soniox's latest English while Claude translates the current segment live, trimmed to its last
+ * [CAPTION_CHARS] characters at a word; null when there is no such caption to show.
+ */
+internal fun liveCaption(segments: List<Segment>, listening: Boolean): String? {
+    val segment = segments.lastOrNull() ?: return null
+    val claude = segment.claude ?: return null
+    if (!listening || claude.failed) return null
+    val text = (segment.english.final + segment.english.provisional).trim()
+    return when {
+        text.isEmpty() -> null
+        text.length <= CAPTION_CHARS -> text
+        else -> "…" + text.takeLast(CAPTION_CHARS).substringAfter(' ')
+    }
+}
+
+/**
  * The text, taking [share] of the panes' text height; nothing at a share of 0. It fades out at an
- * edge with more text beyond it. While [hiding], it dims under a "Release to hide" hint.
+ * edge with more text beyond it. While [hiding], it dims under a "Release to hide" hint. A
+ * [caption] shows below the text.
  */
 @Composable
 private fun ColumnScope.Pane(
@@ -242,6 +281,7 @@ private fun ColumnScope.Pane(
     share: Float,
     hiding: Boolean,
     segments: List<Segment>,
+    caption: String?,
     pane: PaneScroll,
     textScale: Float,
 ) {
@@ -262,25 +302,30 @@ private fun ColumnScope.Pane(
                 val textStyle = remember(body, textScale) {
                     body.copy(fontSize = body.fontSize * textScale, lineHeight = body.lineHeight * textScale)
                 }
-                val provisional = SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f))
+                val provisionalColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                val provisional = SpanStyle(color = provisionalColor)
                 // Rebuilt only when the text changes, not on every frame of a divider drag.
                 val content = remember(segments, side, provisional) { paneText(segments, side.transcriptOf, provisional) }
                 val topFade = rememberEdgeFade { pane.scroll.canScrollBackward }
                 val bottomFade = rememberEdgeFade { pane.scroll.canScrollForward }
-                Text(
-                    content.text,
-                    style = textStyle,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .fadingEdges({ topFade.value }, { bottomFade.value }, FADE_LENGTH)
-                        .verticalScroll(pane.scroll),
-                    onTextLayout = { result ->
-                        pane.layout = PaneLayout(
-                            segmentTops = content.segmentStarts.map { result.getLineTop(result.getLineForOffset(it)) },
-                            height = result.size.height.toFloat(),
-                        )
-                    },
-                )
+                Column(Modifier.fillMaxSize()) {
+                    Text(
+                        content.text,
+                        style = textStyle,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .fadingEdges({ topFade.value }, { bottomFade.value }, FADE_LENGTH)
+                            .verticalScroll(pane.scroll),
+                        onTextLayout = { result ->
+                            pane.layout = PaneLayout(
+                                segmentTops = content.segmentStarts.map { result.getLineTop(result.getLineForOffset(it)) },
+                                height = result.size.height.toFloat(),
+                            )
+                        },
+                    )
+                    if (caption != null) LiveCaption(caption, textStyle, provisionalColor)
+                }
             }
         }
         if (hiding) {
@@ -296,6 +341,23 @@ private fun ColumnScope.Pane(
                 )
             }
         }
+    }
+}
+
+/** The last two lines of [text], smaller than the panes' [paneStyle] and in [color]; earlier lines are cut off. */
+@Composable
+private fun LiveCaption(text: String, paneStyle: TextStyle, color: Color) {
+    val style = remember(paneStyle) {
+        paneStyle.copy(fontSize = paneStyle.fontSize * CAPTION_SCALE, lineHeight = paneStyle.lineHeight * CAPTION_SCALE)
+    }
+    val lineHeight = with(LocalDensity.current) { style.lineHeight.toDp() }
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(lineHeight * 2).clipToBounds()) {
+        Text(
+            text,
+            style = style,
+            color = color,
+            modifier = Modifier.fillMaxWidth().align(Alignment.BottomStart).wrapContentHeight(Alignment.Bottom, unbounded = true),
+        )
     }
 }
 

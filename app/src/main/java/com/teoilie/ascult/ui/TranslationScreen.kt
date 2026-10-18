@@ -138,6 +138,7 @@ private fun TranslationContent(
     ) { padding ->
         SyncedPanes(
             segments = state.segments,
+            listening = state.listening,
             textScale = textScale,
             split = paneSplit,
             onSplitChange = onPaneSplit,
@@ -175,15 +176,16 @@ private fun BottomBar(state: SessionState, audioSettings: AudioSettings, textSca
     }
 }
 
-/** The bar's two lines of status: what is happening, and the audio settings in use (or the error). */
+/** The bar's two lines of status: what is happening, and the audio settings in use (or the error or notice). */
 internal data class StatusText(val title: String, val detail: String, val isError: Boolean = false)
 
 internal fun statusText(state: SessionState, audio: AudioSettings): StatusText = when {
     state.error != null -> StatusText("Error", state.error, isError = true)
     state.phase == Phase.RECONNECTING -> StatusText("Reconnecting…", "Audio is kept and sent once back")
-    state.phase == Phase.STOPPING -> StatusText("Finishing…", audio.summary)
-    state.phase == Phase.LISTENING && state.recording != null -> StatusText("Recording", audio.summary)
-    state.phase == Phase.LISTENING -> StatusText("Listening", audio.summary)
+    state.phase == Phase.STOPPING -> StatusText("Finishing…", state.notice ?: audio.summary)
+    state.phase == Phase.LISTENING && state.recording != null -> StatusText("Recording", state.notice ?: audio.summary)
+    state.phase == Phase.LISTENING -> StatusText("Listening", state.notice ?: audio.summary)
+    state.notice != null -> StatusText("Ready", state.notice)
     audio.saveRecording -> StatusText("Ready", "${audio.summary} · Recording on")
     else -> StatusText("Ready", audio.summary)
 }

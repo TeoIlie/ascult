@@ -49,6 +49,18 @@ class StatusTextTest {
     }
 
     @Test
+    fun `a notice replaces the settings, except while reconnecting`() {
+        val notice = "Claude: retrying"
+        assertEquals(StatusText("Listening", notice), statusText(SessionState(phase = Phase.LISTENING, notice = notice), audio))
+        assertEquals(StatusText("Finishing…", notice), statusText(SessionState(phase = Phase.STOPPING, notice = notice), audio))
+        assertEquals(StatusText("Ready", notice), statusText(SessionState(notice = notice), audio.copy(saveRecording = true)))
+        assertEquals(
+            StatusText("Reconnecting…", "Audio is kept and sent once back"),
+            statusText(SessionState(phase = Phase.RECONNECTING, notice = notice), audio),
+        )
+    }
+
+    @Test
     fun `an error wins over every phase`() {
         for (phase in Phase.entries) {
             val state = SessionState(phase = phase, error = "Invalid API key")

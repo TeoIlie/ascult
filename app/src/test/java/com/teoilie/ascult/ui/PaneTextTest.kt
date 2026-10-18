@@ -2,9 +2,11 @@ package com.teoilie.ascult.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
+import com.teoilie.ascult.soniox.ClaudeText
 import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.Transcript
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PaneTextTest {
@@ -32,5 +34,24 @@ class PaneTextTest {
     fun `provisional text with no final text before it loses its leading space`() {
         val pane = paneText(listOf(Segment("x", english = Transcript("", " The problem"))), Segment::english, provisional)
         assertEquals("The problem", pane.text.text)
+    }
+
+    @Test
+    fun `live caption shows Soniox English only while Claude translates the current segment`() {
+        val live = Segment("x", english = Transcript(" The problem", " is"), claude = ClaudeText())
+        assertEquals("The problem is", liveCaption(listOf(live), listening = true))
+        assertNull(liveCaption(listOf(live), listening = false))
+        assertNull(liveCaption(listOf(live.copy(claude = ClaudeText(failed = true))), listening = true))
+        assertNull(liveCaption(listOf(live.copy(claude = null)), listening = true))
+        assertNull(liveCaption(emptyList(), listening = true))
+    }
+
+    @Test
+    fun `live caption keeps the end of long text, starting at a word`() {
+        val words = List(100) { "word$it" }.joinToString(" ")
+        val caption = liveCaption(listOf(Segment("x", english = Transcript(words), claude = ClaudeText())), listening = true)!!
+        assertEquals(true, caption.startsWith("…word"))
+        assertEquals(true, caption.endsWith("word99"))
+        assertEquals(true, caption.length <= 301)
     }
 }
