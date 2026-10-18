@@ -41,6 +41,7 @@ import com.teoilie.ascult.BuildConfig
 import com.teoilie.ascult.R
 import com.teoilie.ascult.settings.ThemeMode
 import com.teoilie.ascult.soniox.SONIOX_MODEL
+import com.teoilie.ascult.translation.CLAUDE_MODEL
 
 /** The two API keys, each edited in an [ApiKeyDialog]. */
 private enum class ApiKeyField(val title: String) { SONIOX("Soniox API key"), ANTHROPIC("Anthropic API key") }
@@ -94,7 +95,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: 
                 SegmentedListItem(
                     shapes = ListItemDefaults.segmentedShapes(0, 1),
                     leadingContent = { SettingIcon(R.drawable.ic_info) },
-                    supportingContent = { Text("Soniox $SONIOX_MODEL · Romanian to English") },
+                    supportingContent = { Text("Romanian to English · Soniox $SONIOX_MODEL · Claude $CLAUDE_MODEL") },
                 ) { Text("Ascult ${BuildConfig.VERSION_NAME}") }
             }
         }
