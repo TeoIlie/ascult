@@ -77,6 +77,7 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
     val audioSettings by viewModel.audioSettings.collectAsStateWithLifecycle()
     val textScale by viewModel.textScale.collectAsStateWithLifecycle()
     val paneSplit by viewModel.paneSplit.collectAsStateWithLifecycle()
+    val claudeKeySet by viewModel.claudeKeySet.collectAsStateWithLifecycle()
     var showAudioSettings by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -115,6 +116,7 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
         AudioSettingsSheet(
             settings = audioSettings,
             listening = state.listening,
+            claudeKeySet = claudeKeySet,
             onChange = viewModel::updateAudio,
             onDismiss = { showAudioSettings = false },
         )

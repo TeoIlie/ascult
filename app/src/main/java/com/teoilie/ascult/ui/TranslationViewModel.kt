@@ -5,11 +5,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.session.TranslationService
+import com.teoilie.ascult.BuildConfig
 import com.teoilie.ascult.app
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.TEXT_SCALES
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -20,6 +22,11 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
     val state: StateFlow<SessionState> = session.state
     val audioSettings: StateFlow<AudioSettings> =
         settings.audio.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AudioSettings())
+
+    /** Whether Claude translation has a key: one set in Settings, or the debug build's. */
+    val claudeKeySet: StateFlow<Boolean> = settings.anthropicApiKey
+        .map { it.isNotBlank() || BuildConfig.ANTHROPIC_API_KEY.isNotBlank() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     val textScale: StateFlow<Float> = settings.textScale.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1f)
 

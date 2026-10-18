@@ -4,6 +4,7 @@ import com.teoilie.ascult.session.Phase
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.MicSource
+import com.teoilie.ascult.settings.Translator
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
@@ -18,6 +19,14 @@ class StatusTextTest {
         assertEquals(
             StatusText("Ready", "$settings · Recording on"),
             statusText(SessionState(), audio.copy(saveRecording = true)),
+        )
+    }
+
+    @Test
+    fun `Claude translation is part of the settings summary`() {
+        assertEquals(
+            StatusText("Ready", "$settings · Claude"),
+            statusText(SessionState(), audio.copy(translator = Translator.CLAUDE)),
         )
     }
 

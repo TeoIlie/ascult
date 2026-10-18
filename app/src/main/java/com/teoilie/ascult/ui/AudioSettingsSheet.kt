@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.MAX_GAIN_DB
 import com.teoilie.ascult.settings.MicSource
+import com.teoilie.ascult.settings.Translator
 import kotlin.math.roundToInt
 
 private const val GAIN_STEP_DB = 3
@@ -28,6 +29,8 @@ private const val GAIN_STEP_DB = 3
 fun AudioSettingsSheet(
     settings: AudioSettings,
     listening: Boolean,
+    /** Whether an Anthropic API key is available, which Claude translation needs. */
+    claudeKeySet: Boolean,
     onChange: ((AudioSettings) -> AudioSettings) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -35,7 +38,7 @@ fun AudioSettingsSheet(
         SettingsColumn(Modifier.fillMaxWidth()) {
             SettingsGroup(
                 "Microphone source",
-                note = if (listening) "Source and recording changes apply from the next Start." else null,
+                note = if (listening) "Source, recording and translation changes apply from the next Start." else null,
             ) {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                     MicSource.entries.forEachIndexed { index, source ->
@@ -58,6 +61,26 @@ fun AudioSettingsSheet(
                     steps = MAX_GAIN_DB / GAIN_STEP_DB - 1,
                     modifier = Modifier.padding(horizontal = 8.dp),
                 )
+            }
+
+            SettingsGroup("Translation") {
+                SegmentedListItem(
+                    shapes = ListItemDefaults.segmentedShapes(0, 2),
+                    supportingContent = {
+                        Text(
+                            when {
+                                settings.translator == Translator.SONIOX -> "Live from Soniox, a few words at a time"
+                                claudeKeySet -> "Each finished sentence, with the whole sermon as context"
+                                else -> "Add an Anthropic API key in Settings"
+                            },
+                        )
+                    },
+                ) { Text("English by") }
+                SegmentedListItem(shapes = ListItemDefaults.segmentedShapes(1, 2)) {
+                    ConnectedToggleGroup(Translator.entries, settings.translator, Translator::label) { translator ->
+                        onChange { it.copy(translator = translator) }
+                    }
+                }
             }
 
             SettingsGroup("Recording") {

@@ -23,15 +23,17 @@ android {
 
     buildTypes {
         debug {
-            // Dev convenience until the settings screen exists: bake the key from the gitignored .env
-            // into debug builds only. Release builds never contain it.
-            buildConfigField("String", "SONIOX_API_KEY", "\"${sonioxApiKeyFromEnvFile()}\"")
+            // Dev convenience: bake the API keys from the gitignored .env into debug builds only, as
+            // fallbacks for keys not set in Settings. Release builds never contain them.
+            buildConfigField("String", "SONIOX_API_KEY", "\"${envFileValue("SONIOX_API_KEY")}\"")
+            buildConfigField("String", "ANTHROPIC_API_KEY", "\"${envFileValue("ANTHROPIC_API_KEY")}\"")
         }
         release {
             isMinifyEnabled = false
             // Personal sideloaded app: sign release builds with the debug key.
             signingConfig = signingConfigs.getByName("debug")
             buildConfigField("String", "SONIOX_API_KEY", "\"\"")
+            buildConfigField("String", "ANTHROPIC_API_KEY", "\"\"")
         }
     }
 
@@ -59,10 +61,10 @@ dependencies {
     testImplementation(libs.org.json)
 }
 
-/** SONIOX_API_KEY from the repo's .env file (same file tools/stream_test.py reads), or "" if absent. */
-fun sonioxApiKeyFromEnvFile(): String {
+/** [name] from the repo's .env file (same file tools/stream_test.py reads), or "" if absent. */
+fun envFileValue(name: String): String {
     val env = rootProject.file(".env")
     if (!env.exists()) return ""
     val props = Properties().apply { env.reader().use { load(it) } }
-    return props.getProperty("SONIOX_API_KEY", "").trim().removeSurrounding("\"").removeSurrounding("'")
+    return props.getProperty(name, "").trim().removeSurrounding("\"").removeSurrounding("'")
 }

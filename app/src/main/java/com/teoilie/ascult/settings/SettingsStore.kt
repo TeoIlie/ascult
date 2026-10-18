@@ -22,6 +22,9 @@ enum class MicSource(val label: String, val description: String, val audioSource
     CAMCORDER("Camcorder", "Video-recording processing, may use another mic", MediaRecorder.AudioSource.CAMCORDER),
 }
 
+/** Who writes the English: Soniox alongside the Romanian, or Claude from each finished Romanian sentence. */
+enum class Translator(val label: String) { SONIOX("Soniox"), CLAUDE("Claude") }
+
 /** App colours: follow the phone's dark theme setting, or force one. */
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
 
@@ -34,9 +37,10 @@ data class AudioSettings(
     val source: MicSource = MicSource.VOICE_RECOGNITION,
     val gainDb: Int = 0,
     val saveRecording: Boolean = false,
+    val translator: Translator = Translator.SONIOX,
 ) {
-    /** "Voice recognition · +12 dB", as shown in the status and segment labels. */
-    val summary: String get() = "${source.label} · +$gainDb dB"
+    /** "Voice recognition · +12 dB" (plus " · Claude" for Claude translation), as shown in the status and segment labels. */
+    val summary: String get() = "${source.label} · +$gainDb dB" + if (translator == Translator.CLAUDE) " · Claude" else ""
 }
 
 /** Pane split that gives Romanian and English the same height. */
@@ -47,7 +51,9 @@ private val Context.dataStore by preferencesDataStore("settings")
 private val SOURCE = stringPreferencesKey("audio_source")
 private val GAIN_DB = intPreferencesKey("gain_db")
 private val SAVE_RECORDING = booleanPreferencesKey("save_recording")
+private val TRANSLATOR = stringPreferencesKey("translator")
 private val API_KEY = stringPreferencesKey("soniox_api_key")
+private val ANTHROPIC_API_KEY = stringPreferencesKey("anthropic_api_key")
 private val DICTIONARY = stringPreferencesKey("dictionary_json")
 private val TEXT_SCALE = floatPreferencesKey("text_scale")
 private val THEME = stringPreferencesKey("theme")
@@ -63,6 +69,13 @@ class SettingsStore(context: Context) {
 
     suspend fun setApiKey(key: String) {
         dataStore.edit { it[API_KEY] = key }
+    }
+
+    /** For Claude translation; stored like [apiKey]. */
+    val anthropicApiKey: Flow<String> = dataStore.data.map { it[ANTHROPIC_API_KEY].orEmpty() }
+
+    suspend fun setAnthropicApiKey(key: String) {
+        dataStore.edit { it[ANTHROPIC_API_KEY] = key }
     }
 
     /** The in-app dictionary override, or null to use the bundled default. */
@@ -101,6 +114,7 @@ class SettingsStore(context: Context) {
             prefs[SOURCE] = updated.source.name
             prefs[GAIN_DB] = updated.gainDb.coerceIn(0, MAX_GAIN_DB)
             prefs[SAVE_RECORDING] = updated.saveRecording
+            prefs[TRANSLATOR] = updated.translator.name
         }
     }
 }
@@ -113,4 +127,5 @@ private fun Preferences.toAudioSettings() = AudioSettings(
     source = enum(SOURCE, MicSource.VOICE_RECOGNITION),
     gainDb = (this[GAIN_DB] ?: 0).coerceIn(0, MAX_GAIN_DB),
     saveRecording = this[SAVE_RECORDING] ?: false,
+    translator = enum(TRANSLATOR, Translator.SONIOX),
 )

@@ -50,6 +50,7 @@ private fun String.pairs(separator: Char): List<Pair<String, String>> = lines().
 
 data class SettingsForm(
     val apiKey: String,
+    val anthropicApiKey: String,
     val dictionary: DictionaryText,
     val dictionaryIsDefault: Boolean,
     /** The bundled dictionary, for Reset and for recognising edits that match it. */
@@ -79,6 +80,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val dictionary = settings.dictionary.first()
             form = SettingsForm(
                 apiKey = settings.apiKey.first(),
+                anthropicApiKey = settings.anthropicApiKey.first(),
                 dictionary = DictionaryText.from(dictionary ?: defaultDictionary),
                 dictionaryIsDefault = dictionary == null,
                 defaultDictionary = defaultDictionary,
@@ -89,6 +91,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setApiKey(key: String) {
         form = form?.copy(apiKey = key)
         viewModelScope.launch { settings.setApiKey(key.trim()) }
+    }
+
+    fun setAnthropicApiKey(key: String) {
+        form = form?.copy(anthropicApiKey = key)
+        viewModelScope.launch { settings.setAnthropicApiKey(key.trim()) }
     }
 
     fun setDictionary(text: DictionaryText) {
