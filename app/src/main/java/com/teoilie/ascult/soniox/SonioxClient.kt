@@ -21,7 +21,7 @@ import java.nio.ByteOrder
 import java.util.concurrent.TimeUnit
 
 private const val URL = "wss://stt-rt.soniox.com/transcribe-websocket"
-private const val MODEL = "stt-rt-v5"
+const val SONIOX_MODEL = "stt-rt-v5"
 
 /** A connection that misses a pong for this long fails, so a silently stalled network triggers a reconnect. */
 private const val PING_INTERVAL_SECONDS = 10L
@@ -77,7 +77,7 @@ class SonioxClient(
     // Mirrored by build_config() in tools/stream_test.py; keep the two in sync.
     private fun config(apiKey: String, dictionary: Dictionary) = JSONObject().apply {
         put("api_key", apiKey)
-        put("model", MODEL)
+        put("model", SONIOX_MODEL)
         put("audio_format", "pcm_s16le")
         put("sample_rate", SAMPLE_RATE)
         put("num_channels", 1)

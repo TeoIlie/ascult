@@ -23,6 +23,12 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
     val textScale: StateFlow<Float> = settings.textScale.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1f)
 
+    val paneSplit: StateFlow<Float> = settings.paneSplit.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.5f)
+
+    fun setPaneSplit(split: Float) {
+        viewModelScope.launch { settings.setPaneSplit(split) }
+    }
+
     /** Moves the text size [steps] along [TEXT_SCALES]. */
     fun changeTextScale(steps: Int) {
         val current = TEXT_SCALES.indexOfFirst { it >= textScale.value }.takeIf { it >= 0 } ?: TEXT_SCALES.lastIndex

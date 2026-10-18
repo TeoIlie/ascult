@@ -1,3 +1,4 @@
 <resources>
-    <style name="Theme.Ascult" parent="android:Theme.Material.NoActionBar" />
+    <!-- Only the window before Compose draws; Compose paints the app's own (dynamic) colours. -->
+    <style name="Theme.Ascult" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

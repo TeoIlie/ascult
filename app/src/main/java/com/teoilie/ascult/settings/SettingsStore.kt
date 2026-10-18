@@ -22,6 +22,9 @@ enum class MicSource(val label: String, val description: String, val audioSource
     CAMCORDER("Camcorder", "Video-recording processing, may use another mic", MediaRecorder.AudioSource.CAMCORDER),
 }
 
+/** App colours: follow the phone's dark theme setting, or force one. */
+enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
+
 const val MAX_GAIN_DB = 24
 
 /** Transcript text sizes, as multiples of the default body text size. */
@@ -41,6 +44,8 @@ private val SAVE_RECORDING = booleanPreferencesKey("save_recording")
 private val API_KEY = stringPreferencesKey("soniox_api_key")
 private val DICTIONARY = stringPreferencesKey("dictionary_json")
 private val TEXT_SCALE = floatPreferencesKey("text_scale")
+private val THEME = stringPreferencesKey("theme")
+private val PANE_SPLIT = floatPreferencesKey("pane_split")
 
 class SettingsStore(context: Context) {
     private val dataStore = context.dataStore
@@ -69,6 +74,21 @@ class SettingsStore(context: Context) {
 
     suspend fun setTextScale(scale: Float) {
         dataStore.edit { it[TEXT_SCALE] = scale }
+    }
+
+    val theme: Flow<ThemeMode> = dataStore.data.map { prefs ->
+        prefs[THEME]?.let { name -> ThemeMode.entries.find { it.name == name } } ?: ThemeMode.SYSTEM
+    }
+
+    suspend fun setTheme(mode: ThemeMode) {
+        dataStore.edit { it[THEME] = mode.name }
+    }
+
+    /** Romanian pane's share of the panes' height: 0 collapses it, 1 collapses English. */
+    val paneSplit: Flow<Float> = dataStore.data.map { (it[PANE_SPLIT] ?: 0.5f).coerceIn(0f, 1f) }
+
+    suspend fun setPaneSplit(split: Float) {
+        dataStore.edit { it[PANE_SPLIT] = split.coerceIn(0f, 1f) }
     }
 
     suspend fun updateAudio(transform: (AudioSettings) -> AudioSettings) {

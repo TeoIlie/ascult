@@ -7,9 +7,13 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.teoilie.ascult.app
+import com.teoilie.ascult.settings.ThemeMode
 import com.teoilie.ascult.soniox.Dictionary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -58,6 +62,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     var form by mutableStateOf<SettingsForm?>(null)
         private set
+
+    val theme: StateFlow<ThemeMode> =
+        settings.theme.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThemeMode.SYSTEM)
+
+    fun setTheme(mode: ThemeMode) {
+        viewModelScope.launch { settings.setTheme(mode) }
+    }
 
     init {
         viewModelScope.launch {
