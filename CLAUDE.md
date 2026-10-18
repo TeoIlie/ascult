@@ -1,6 +1,6 @@
 # Ascult: developer notes
 
-Personal Android app: microphone → Soniox real-time API → live Romanian transcript and English translation, for Orthodox sermons heard from across a church. Single user (Pixel 10, GrapheneOS), sideloaded, no backend, no Play Services. User-facing docs are in `README.md`.
+Personal Android app: microphone → Soniox real-time API → live Romanian transcript and English translation (by Soniox, or optionally by Claude from finished sentences), for Orthodox sermons heard from across a church. Single user (Pixel 10, GrapheneOS), sideloaded, no backend, no Play Services. User-facing docs are in `README.md`.
 
 ## Commands
 
@@ -19,15 +19,19 @@ Launch and screenshot over adb: `adb shell am start -n com.teoilie.ascult/.MainA
 Mic ──► AudioCapture (16 kHz mono PCM16) ──► TranslationSession ──► SonioxClient (WebSocket) ──► Soniox stt-rt
                                                   │  ▲                                                  │
                                                   │  └──────── tokens (Romanian + English, final + provisional)
+                                                  ▼            Claude mode: finished Romanian sentences
+                       SessionState (phase, level, segments) ◄──► ClaudeTranslator ──► ClaudeClient (HTTP) ──► Claude Messages API
+                                                  │
                                                   ▼
-                       SessionState (phase, level, segments) ──► ViewModels ──► Compose UI (SyncedPanes)
+                                    ViewModels ──► Compose UI (SyncedPanes)
 ```
 
 - `TranslationSession` lives for the whole process (held by `AscultApp`, reached via `context.app.session`). `TranslationService` is a microphone foreground service that only keeps the process, mic and CPU alive while the session listens, and stops itself when the session goes idle.
 - `SessionState.phase`: IDLE, LISTENING, RECONNECTING (still capturing into the buffer), STOPPING (mic off, waiting for Soniox to finalise). `listening` is `phase != IDLE`. `error` is only for real failures; reconnecting is a neutral status.
 - Audio goes into a 30 s `Channel` that outlives individual connections. The reconnect loop retries `IOException`s (including OkHttp's missed-pong failure; pings every 10 s) and Soniox 408/429/5xx with backoff 1, 2, 4, 8, 10 s. Other Soniox errors end the session. A dropped connection loses only its provisional text.
 - Each Start appends a `Segment` labelled with source, gain and time; Clear resets. Transcripts autosave every 15 s and at session end (`SessionFiles`, serialised writer).
-- Settings (audio source/gain/recording, text size, pane split, theme, API key, dictionary override) are in DataStore. API key: Settings value, else debug-only `BuildConfig.SONIOX_API_KEY` from `.env`. Data is excluded from backups (`res/xml/data_extraction_rules.xml`).
+- Claude mode (`AudioSettings.translator`, fixed per segment at Start): Soniox still runs with translation on (its English feeds the live caption and is the fallback). A translation job in `listen()` sends the current segment's final Romanian to Claude via `nextChunk` (sentence ends; fragments under 4 words wait; run-ons over 40 words are cut), one request at a time, and appends the English to `Segment.claude`. Retryable failures back off like reconnects and show `SessionState.notice`; other failures mark the segment's Claude text failed (pane falls back to Soniox's English) without stopping. On Stop, the rest is flushed after Soniox finishes (stop timeout grows by 10 s).
+- Settings (audio source/gain/recording/translator, text size, pane split, theme, API keys, dictionary override) are in DataStore. API keys: Settings value, else debug-only `BuildConfig.SONIOX_API_KEY` / `ANTHROPIC_API_KEY` from `.env`. Data is excluded from backups (`res/xml/data_extraction_rules.xml`).
 
 ## Soniox protocol
 
@@ -49,6 +53,13 @@ Mic ──► AudioCapture (16 kHz mono PCM16) ──► TranslationSession ─�
 - `context` limit is ~10,000 characters (8,000 tokens); exceeding it fails the request. `DictionaryTest` enforces this for the bundled dictionary. Soniox advises ≤10 `general` pairs.
 - Model names change between versions; check the Soniox docs when updating.
 
+## Claude translation
+
+- `POST https://api.anthropic.com/v1/messages` with `x-api-key` and `anthropic-version: 2023-06-01`; model `CLAUDE_MODEL` (`claude-haiku-4-5`), `max_tokens` 2048, no thinking.
+- One conversation per session until Clear (new if the key or dictionary changes): `system` is `assets/claude_translation_prompt.txt` plus the dictionary's `general` and `translation_terms` (`systemPrompt`); each turn is user = Romanian chunk, assistant = English. Only successful turns are kept, so a failed chunk is resent merged with what followed and roles keep alternating.
+- Top-level `"cache_control": {"type": "ephemeral"}` caches the growing conversation (5-min TTL, refreshed by each request). Haiku 4.5 only caches prompts of 4,096+ tokens, so the first minutes of a sermon are uncached. Each request logs its usage to logcat (tag `Ascult`): check that `cache read` grows.
+- Errors: `{"error": {"type", "message"}}`; 408/429/5xx (incl. 529 overloaded) and `IOException`s are retried.
+
 ## Code map
 
 Kotlin sources: `app/src/main/java/com/teoilie/ascult/`.
@@ -62,25 +73,30 @@ Kotlin sources: `app/src/main/java/com/teoilie/ascult/`.
 | `soniox/SonioxClient.kt` | WebSocket protocol: config, audio frames, token parsing, errors, pings. |
 | `soniox/Transcript.kt` | `Transcript`, `Segment`, pure update helpers (`withTokens`, `withoutProvisional`), plain-text export. |
 | `soniox/Dictionary.kt` | Soniox `context` model; loads `assets/dictionary.json`. |
-| `session/TranslationSession.kt` | Lifecycle: start checks, capture → buffer → (re)connect loop, autosave, stop, clear. |
+| `translation/SentenceChunker.kt` | `nextChunk`: which finished Romanian to send to Claude next. |
+| `translation/ClaudeClient.kt` | Messages API over OkHttp: request/response JSON, `ClaudeException`. |
+| `translation/ClaudeTranslator.kt` | The sermon conversation; `systemPrompt` from instructions + dictionary. |
+| `session/TranslationSession.kt` | Lifecycle: start checks, capture → buffer → (re)connect loop, Claude translation job, autosave, stop, clear. |
 | `session/SessionFiles.kt` | Recording/transcript files in external storage; serialised saving. |
 | `session/TranslationService.kt` | Microphone foreground service, Stop notification, wake lock (4 h cap). |
-| `settings/SettingsStore.kt` | DataStore keys and flows; `MicSource`, `ThemeMode`. |
+| `settings/SettingsStore.kt` | DataStore keys and flows; `MicSource`, `Translator`, `ThemeMode`. |
 | `ui/TranslationScreen.kt` | Main screen: panes, docked bottom bar (status, ⋮ menu, Start/Stop); `statusText`. |
-| `ui/SyncedPanes.kt` | Text-only panes (`paneText`, `PaneSide`) with fading edges, live follow, segment-aligned scroll sync (`PaneLayout`), haptics and hide preview. |
+| `ui/SyncedPanes.kt` | Text-only panes (`paneText`, `PaneSide`) with fading edges, live follow, segment-aligned scroll sync (`PaneLayout`), haptics and hide preview; Claude mode's `liveCaption`. |
 | `ui/PaneDivider.kt` | Divider between the panes: labels, handle, drag/double-tap/accessibility, `snapSplit`. |
 | `ui/LevelMeter.kt` | Mini input level meter. |
-| `ui/AudioSettingsSheet.kt` | Source, gain, recording sheet. |
-| `ui/Components.kt` | Shared bits: `share()`, `BackButton`, `IconMenu`, `SettingsColumn`/`SettingsGroup`. |
-| `ui/SettingsScreen.kt`, `ui/DictionaryScreen.kt`, `ui/SettingsViewModel.kt` | Grouped settings (theme, API key dialog, about); dictionary editor (`DictionaryText` ↔ `Dictionary`). |
+| `ui/AudioSettingsSheet.kt` | Source, gain, translation, recording sheet. |
+| `ui/Components.kt` | Shared bits: `share()`, `BackButton`, `IconMenu`, `SettingsColumn`/`SettingsGroup`, `ConnectedToggleGroup`. |
+| `ui/SettingsScreen.kt`, `ui/DictionaryScreen.kt`, `ui/SettingsViewModel.kt` | Grouped settings (theme, API key dialogs, about); dictionary editor (`DictionaryText` ↔ `Dictionary`). |
 | `ui/TranslationViewModel.kt`, `ui/Theme.kt` | Main screen state/actions; Material 3 Expressive theme with wallpaper colours and Google Sans Flex. |
 | `app/src/main/assets/dictionary.json` | Default dictionary, shared with `tools/stream_test.py`. |
+| `app/src/main/assets/claude_translation_prompt.txt` | Claude's translation instructions (the dictionary is appended). |
 | `tools/stream_test.py` | Desktop Soniox check; local outputs go in gitignored `tools/data/`. |
 
 ## Conventions and gotchas
 
 - **Keep `SonioxClient.config()` and `build_config()` in `tools/stream_test.py` in sync** (model, format, hints, translation); each has a comment pointing at the other.
 - **Look**: Material 3 Expressive (`MaterialExpressiveTheme`, `SegmentedListItem`, connected `ToggleButton`s). Icons are Material Symbols Rounded vector drawables in `res/drawable/ic_*.xml`; don't add `material-icons-extended` (minify is off). `res/font/google_sans_flex.ttf` is Google Sans Flex (OFL, licence in `assets/licenses/`) cut to Latin + Romanian with only the weight axis (300–700); re-cut it with fonttools `varLib.instancer` + `pyftsubset` if glyphs are missing.
+- **Claude over plain HTTP**: `ClaudeClient` uses OkHttp + `org.json` on purpose. The official `anthropic-java` SDK added about 44 MB to the APK and expects OkHttp 4; don't reintroduce it.
 - **Microphone permission**: lint's `MissingPermission` needs the explicit check in `TranslationSession.start()`; `listen()` is `@RequiresPermission`. Keep both.
 - **Foreground service**: it must be started while the app is visible (Android 14+), which is why `TranslationViewModel.start()` starts the session first and the service second.
 - **Dictionary edits**: the in-app override in DataStore hides changes to the bundled default; after changing `dictionary.json`, tap Settings → Dictionary → ⋮ → Reset to bundled default on the phone.
