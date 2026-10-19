@@ -25,8 +25,16 @@ import com.teoilie.ascult.ui.SettingsScreen
 import com.teoilie.ascult.ui.TranslationScreen
 import com.teoilie.ascult.ui.isDark
 
-/** The app's screens, each one level deeper than the last; Back returns to the previous one. */
-private enum class Screen { MAIN, SETTINGS, DICTIONARY }
+/** The app's screens; Back returns to [parent]. */
+private enum class Screen(val parent: Screen?) {
+    MAIN(null),
+    SETTINGS(MAIN),
+    DICTIONARY(SETTINGS),
+    ;
+
+    /** How many Backs lead to the main screen; deeper screens slide in from the right. */
+    val depth: Int get() = parent?.let { it.depth + 1 } ?: 0
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,12 +56,12 @@ class MainActivity : ComponentActivity() {
             }
 
             AscultTheme(dark) {
-                val back = { screen = Screen.entries[screen.ordinal - 1] }
+                val back = { screen = screen.parent ?: Screen.MAIN }
                 BackHandler(enabled = screen != Screen.MAIN, onBack = back)
                 AnimatedContent(
                     targetState = screen,
                     transitionSpec = {
-                        val forward = targetState > initialState
+                        val forward = targetState.depth > initialState.depth
                         (slideInHorizontally { if (forward) it / 4 else -it / 4 } + fadeIn()) togetherWith
                             (slideOutHorizontally { if (forward) -it / 4 else it / 4 } + fadeOut())
                     },
