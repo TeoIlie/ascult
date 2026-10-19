@@ -8,11 +8,14 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
+/** Our WAV files have the plain 44-byte header, then the samples. */
+internal const val WAV_HEADER_BYTES = 44
+
 /** Writes 16 kHz mono PCM16 to a WAV file; the header sizes are filled in on [close]. */
 class WavWriter(file: File) : Closeable {
     private val out = RandomAccessFile(file, "rw").apply {
         setLength(0)
-        write(ByteArray(HEADER_BYTES))
+        write(ByteArray(WAV_HEADER_BYTES))
     }
     private var dataBytes = 0L
 
@@ -29,7 +32,7 @@ class WavWriter(file: File) : Closeable {
         out.close()
     }
 
-    private fun header(dataBytes: Long): ByteArray = ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN).apply {
+    private fun header(dataBytes: Long): ByteArray = ByteBuffer.allocate(WAV_HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN).apply {
         put("RIFF".toByteArray()); putInt((36 + dataBytes).toInt())
         put("WAVE".toByteArray())
         put("fmt ".toByteArray()); putInt(16)
@@ -41,10 +44,6 @@ class WavWriter(file: File) : Closeable {
         putShort(16) // bits per sample
         put("data".toByteArray()); putInt(dataBytes.toInt())
     }.array()
-
-    private companion object {
-        const val HEADER_BYTES = 44
-    }
 }
 
 /** Passes frames through unchanged while saving them to [file] as WAV. */

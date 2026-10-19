@@ -2,6 +2,7 @@ package com.teoilie.ascult.history
 
 import android.content.Context
 import android.util.Log
+import com.teoilie.ascult.audio.encodeM4a
 import com.teoilie.ascult.settings.AudioSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,9 @@ private const val TAG = "Ascult"
 private const val ENTRY_FILE = "entry.json"
 const val RECORDING_FILE = "audio.wav"
 
+/** The recording once compressed after Save (see [encodeM4a]). */
+const val COMPRESSED_FILE = "audio.m4a"
+
 /**
  * History entries in the app's external files directory, one folder each
  * (/sdcard/Android/data/com.teoilie.ascult/files/history/20261018-101500/), where `adb pull` can reach them.
@@ -32,6 +36,9 @@ class HistoryStore(context: Context, private val scope: CoroutineScope) {
 
     /** Serialises all file changes, so an autosave, the final save and a delete never interleave. */
     private val writer = Dispatchers.IO.limitedParallelism(1)
+
+    /** Compresses one recording at a time, beside the writer so saving never waits for it. */
+    private val encoder = Dispatchers.Default.limitedParallelism(1)
 
     private val _entries = MutableStateFlow<List<HistoryEntry>>(emptyList())
 
@@ -61,13 +68,49 @@ class HistoryStore(context: Context, private val scope: CoroutineScope) {
 
     fun recordingFile(entry: HistoryEntry): File? = entry.audio?.let { File(File(root, entry.id), it) }
 
-    /** Saves [entry] in the background; saved entries appear in [entries]. */
+    /** Saves [entry] in the background; saved entries appear in [entries], and their recording is compressed. */
     fun write(entry: HistoryEntry) {
         scope.launch(writer) {
             val dir = File(root, entry.id)
             if (!dir.isDirectory) return@launch // deleted meanwhile
-            writeJson(dir, entry)
-            if (entry.saved) publish(withSize(entry))
+            // A copy from before compression finished (e.g. renamed meanwhile) keeps the compressed file.
+            val current = if (entry.audio == RECORDING_FILE && !File(dir, RECORDING_FILE).exists()) entry.copy(audio = COMPRESSED_FILE) else entry
+            writeJson(dir, current)
+            if (current.saved) {
+                publish(withSize(current))
+                if (current.audio == RECORDING_FILE) compress(current.id)
+            }
+        }
+    }
+
+    /**
+     * Replaces a saved entry's WAV with an .m4a about an eighth of its size. If the process dies
+     * meanwhile, the WAV stays and is compressed at the next launch.
+     */
+    private fun compress(id: String) {
+        scope.launch(encoder) {
+            val dir = File(root, id)
+            val wav = File(dir, RECORDING_FILE)
+            val temp = File(dir, "$COMPRESSED_FILE.tmp")
+            try {
+                encodeM4a(wav, temp)
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't compress the recording of $id", e)
+                temp.delete()
+                return@launch
+            }
+            withContext(writer) {
+                val entry = read(dir) // the latest title; null if deleted meanwhile
+                if (entry == null || !temp.renameTo(File(dir, COMPRESSED_FILE))) {
+                    temp.delete()
+                    return@withContext
+                }
+                val compressed = entry.copy(audio = COMPRESSED_FILE)
+                writeJson(dir, compressed)
+                wav.delete()
+                if (compressed.saved) publish(withSize(compressed))
+                Log.i(TAG, "Compressed the recording of $id to ${File(dir, COMPRESSED_FILE).length() / 1000} kB")
+            }
         }
     }
 
@@ -107,6 +150,10 @@ class HistoryStore(context: Context, private val scope: CoroutineScope) {
             if (entry.saved) entry else entry.copy(saved = true).also { writeJson(dir, it) }
         }
         _entries.value = loaded.map(::withSize).sortedByDescending { it.startedAt }
+        for (entry in loaded) {
+            File(root, entry.id).listFiles { file -> file.name.endsWith(".tmp") }?.forEach { it.delete() }
+            if (entry.audio == RECORDING_FILE) compress(entry.id)
+        }
     }
 
     private fun read(dir: File): HistoryEntry? {
