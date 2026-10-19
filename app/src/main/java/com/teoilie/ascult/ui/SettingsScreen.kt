@@ -46,7 +46,7 @@ import com.teoilie.ascult.translation.CLAUDE_MODEL
 /** The two API keys, each edited in an [ApiKeyDialog]. */
 private enum class ApiKeyField(val title: String) { SONIOX("Soniox API key"), ANTHROPIC("Anthropic API key") }
 
-/** Grouped settings: theme, API keys (dialog), dictionary (own screen), about. */
+/** Grouped settings: theme, vocabulary and context (own screen), API keys (dialog), about. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: SettingsViewModel = viewModel()) {
@@ -68,27 +68,27 @@ fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: 
             SettingsGroup("Appearance") {
                 ThemeSetting(theme, viewModel::setTheme)
             }
-            SettingsGroup("Transcription") {
+            SettingsGroup("Sermon") {
+                SegmentedListItem(
+                    onClick = onOpenDictionary,
+                    shapes = ListItemDefaults.segmentedShapes(0, 1),
+                    leadingContent = { SettingIcon(R.drawable.ic_book) },
+                    trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
+                    supportingContent = { Text("Expected words, fixed translations, setting, background\n${form.dictionarySource}") },
+                ) { Text(VOCABULARY_TITLE) }
+            }
+            SettingsGroup("API keys") {
                 SegmentedListItem(
                     onClick = { editingKey = ApiKeyField.SONIOX },
                     shapes = ListItemDefaults.segmentedShapes(0, 2),
                     leadingContent = { SettingIcon(R.drawable.ic_key) },
-                    supportingContent = { Text(keyStatus(form.apiKey, BuildConfig.SONIOX_API_KEY)) },
+                    supportingContent = { Text("Transcription · " + keyStatus(form.apiKey, BuildConfig.SONIOX_API_KEY)) },
                 ) { Text(ApiKeyField.SONIOX.title) }
                 SegmentedListItem(
-                    onClick = onOpenDictionary,
-                    shapes = ListItemDefaults.segmentedShapes(1, 2),
-                    leadingContent = { SettingIcon(R.drawable.ic_book) },
-                    trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-                    supportingContent = { Text(form.dictionarySource) },
-                ) { Text("Dictionary") }
-            }
-            SettingsGroup("Claude translation") {
-                SegmentedListItem(
                     onClick = { editingKey = ApiKeyField.ANTHROPIC },
-                    shapes = ListItemDefaults.segmentedShapes(0, 1),
+                    shapes = ListItemDefaults.segmentedShapes(1, 2),
                     leadingContent = { SettingIcon(R.drawable.ic_key) },
-                    supportingContent = { Text(keyStatus(form.anthropicApiKey, BuildConfig.ANTHROPIC_API_KEY)) },
+                    supportingContent = { Text("Claude translation · " + keyStatus(form.anthropicApiKey, BuildConfig.ANTHROPIC_API_KEY)) },
                 ) { Text(ApiKeyField.ANTHROPIC.title) }
             }
             SettingsGroup("About") {

@@ -86,7 +86,7 @@ Kotlin sources: `app/src/main/java/com/teoilie/ascult/`.
 | `ui/LevelMeter.kt` | Mini input level meter. |
 | `ui/AudioSettingsSheet.kt` | Source, gain, translation, recording sheet. |
 | `ui/Components.kt` | Shared bits: `share()`, `BackButton`, `IconMenu`, `SettingsColumn`/`SettingsGroup`, `ConnectedToggleGroup`. |
-| `ui/SettingsScreen.kt`, `ui/DictionaryScreen.kt`, `ui/SettingsViewModel.kt` | Grouped settings (theme, API key dialogs, about); dictionary editor (`DictionaryText` ↔ `Dictionary`). |
+| `ui/SettingsScreen.kt`, `ui/DictionaryScreen.kt`, `ui/SettingsViewModel.kt` | Grouped settings (theme, vocabulary and context, API key dialogs, about); dictionary editor ("Vocabulary and context") (`DictionaryText` ↔ `Dictionary`). |
 | `ui/TranslationViewModel.kt`, `ui/Theme.kt` | Main screen state/actions; Material 3 Expressive theme with wallpaper colours and Google Sans Flex. |
 | `app/src/main/assets/dictionary.json` | Default dictionary, shared with `tools/stream_test.py`. |
 | `app/src/main/assets/claude_translation_prompt.txt` | Claude's translation instructions (the dictionary is appended). |
@@ -99,7 +99,7 @@ Kotlin sources: `app/src/main/java/com/teoilie/ascult/`.
 - **Claude over plain HTTP**: `ClaudeClient` uses OkHttp + `org.json` on purpose. The official `anthropic-java` SDK added about 44 MB to the APK and expects OkHttp 4; don't reintroduce it.
 - **Microphone permission**: lint's `MissingPermission` needs the explicit check in `TranslationSession.start()`; `listen()` is `@RequiresPermission`. Keep both.
 - **Foreground service**: it must be started while the app is visible (Android 14+), which is why `TranslationViewModel.start()` starts the session first and the service second.
-- **Dictionary edits**: the in-app override in DataStore hides changes to the bundled default; after changing `dictionary.json`, tap Settings → Dictionary → ⋮ → Reset to bundled default on the phone.
+- **Dictionary edits**: the in-app override in DataStore hides changes to the bundled default; after changing `dictionary.json`, tap Settings → Vocabulary and context → ⋮ → Reset to bundled default on the phone. In code and JSON it is still the "dictionary".
 - **Versions** live in `gradle/libs.versions.toml`; the Gradle wrapper pins a SHA-256 (`./gradlew wrapper --gradle-version X --gradle-distribution-sha256-sum <sha>`).
 - **Unit tests** cover pure logic only (`org.json` comes from a test dependency, since Android's is a stub on the JVM). Unit tests run with `app/` as the working directory.
 - **Testing on the phone**: the user tests audio by hand (speaking, or playing `~/Downloads/20261011_*.m4a` from a laptop). Don't play audio from the desktop speakers. adb screenshots and logcat are fine, but avoid driving the UI while the user may be using the phone.

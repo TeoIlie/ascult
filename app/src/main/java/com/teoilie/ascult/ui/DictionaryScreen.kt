@@ -25,7 +25,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.R
 
-/** Editor for the Soniox context; edits save as they are typed (see [SettingsViewModel]). */
+/** The settings and screen title of the dictionary editor. */
+internal const val VOCABULARY_TITLE = "Vocabulary and context"
+
+/**
+ * Editor for the [com.teoilie.ascult.soniox.Dictionary] sent to Soniox (and, in part, to Claude);
+ * edits save as they are typed (see [SettingsViewModel]).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DictionaryScreen(onBack: () -> Unit, viewModel: SettingsViewModel = viewModel()) {
@@ -36,7 +42,7 @@ fun DictionaryScreen(onBack: () -> Unit, viewModel: SettingsViewModel = viewMode
             TopAppBar(
                 title = {
                     Column {
-                        Text("Dictionary")
+                        Text(VOCABULARY_TITLE)
                         if (form != null) {
                             Text(
                                 form.dictionarySource,
@@ -48,7 +54,7 @@ fun DictionaryScreen(onBack: () -> Unit, viewModel: SettingsViewModel = viewMode
                 },
                 navigationIcon = { BackButton(onBack) },
                 actions = {
-                    IconButton(onClick = { share(context, "Ascult dictionary", viewModel.dictionaryJson()) }) {
+                    IconButton(onClick = { share(context, "Ascult vocabulary and context", viewModel.dictionaryJson()) }) {
                         Icon(painterResource(R.drawable.ic_share), contentDescription = "Share as JSON")
                     }
                     IconMenu(R.drawable.ic_more_vert, "More") { close ->
@@ -78,25 +84,25 @@ fun DictionaryScreen(onBack: () -> Unit, viewModel: SettingsViewModel = viewMode
         ) {
             DictionaryField(
                 label = "Expected words",
-                hint = "Uncommon Romanian words and names, one per line",
+                hint = "Uncommon Romanian words and names, so Soniox hears them right. One per line",
                 value = text.terms,
                 onChange = { viewModel.setDictionary(text.copy(terms = it)) },
             )
             DictionaryField(
                 label = "Fixed translations",
-                hint = "One per line: țarina = field",
+                hint = "For Soniox and Claude. One per line: țarina = field",
                 value = text.translationTerms,
                 onChange = { viewModel.setDictionary(text.copy(translationTerms = it)) },
             )
             DictionaryField(
-                label = "Context",
-                hint = "One per line: domain: Orthodox sermon",
+                label = "Setting",
+                hint = "Who is speaking, where, about what; for Soniox and Claude. One per line: domain: Orthodox sermon",
                 value = text.general,
                 onChange = { viewModel.setDictionary(text.copy(general = it)) },
             )
             DictionaryField(
                 label = "Background",
-                hint = "Free text about the speaker or topic",
+                hint = "Free text about the speaker or topic, so Soniox expects the right words",
                 value = text.text,
                 onChange = { viewModel.setDictionary(text.copy(text = it)) },
             )

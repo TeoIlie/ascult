@@ -10,7 +10,7 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
 - Material 3 Expressive look in your wallpaper's colours, light or dark (or follow the phone), in Google Sans Flex.
 - Keeps listening with the screen off (foreground service with a Stop notification), and keeps the screen awake while the app is open.
 - Survives network drops: audio is buffered for 30 s and sent once the connection is back; stalled connections are detected within ~20 s.
-- A dictionary of Orthodox church vocabulary sent to Soniox, editable in the app.
+- Orthodox church vocabulary and context sent to Soniox (and, in part, to Claude), editable in the app.
 - Transcripts can be shared and are saved automatically.
 - No backend and no Google Play Services; installed with `adb`.
 
@@ -41,8 +41,8 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
   - **Save recording**: saves exactly what is sent to Soniox as a WAV named `<time>_<SOURCE>_+<gain>dB.wav`.
 - **Settings** (⋮ → Settings):
   - **Theme**: System, Light or Dark (Dark is handy in church even when the phone is light).
-  - **Soniox API key** and **Anthropic API key** (for Claude translation): tap to enter; stored on the phone only (excluded from backups). The Anthropic key needs API credit from the Claude Console; a Claude Pro subscription does not include API use.
-  - **Dictionary**: its own screen with expected words, fixed translations (`țarina = field`), context (`domain: Orthodox sermon`) and background text, one entry per line. **Share** exports your edits as JSON so they can be copied into `app/src/main/assets/dictionary.json`; **⋮ → Reset to bundled default** restores the default.
+  - **Vocabulary and context** (under Sermon): its own screen with expected words, fixed translations (`țarina = field`), the setting (`domain: Orthodox sermon`) and background text, one entry per line. Each field says whether Soniox, Claude or both use it. **Share** exports your edits as JSON so they can be copied into `app/src/main/assets/dictionary.json`; **⋮ → Reset to bundled default** restores the default.
+  - **API keys**: **Soniox API key** and **Anthropic API key** (for Claude translation). Tap to enter; stored on the phone only (excluded from backups). The Anthropic key needs API credit from the Claude Console; a Claude Pro subscription does not include API use.
 - **Text size** (the TT icon) opens a − / + stepper; **⋮ → Share transcript** sends the transcript as plain text.
 - **Divider**: the line between the panes carries their names ("Română ↑", "English ↓") and a handle. Drag it to give one language more room; the handle lights up and the phone ticks when you touch it. Dragged nearly to the top or bottom, that pane dims with "Release to hide…" and a firmer tick; letting go hides it. Tap the hidden pane's name (or double-tap the divider) to bring it back. The position is remembered.
 - **Scrolling**: both panes follow new text, which fades out at a pane's edge where there is more to scroll. Scroll either pane to review, and the other stays aligned; **Jump to live** (or scrolling to the end) resumes following.
@@ -50,15 +50,15 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
 
 Transcripts (saved every 15 s while listening and at Stop) and recordings are on the phone in `/sdcard/Android/data/com.teoilie.ascult/files/`. Sections translated by Claude keep Soniox's English too, as `EN (Soniox):`.
 
-## The dictionary
+## Vocabulary and context (the dictionary)
 
 Soniox accepts a `context` with each session, and it made a clear difference in testing (farming metaphors in the sample sermon went from "toll" and "the slave's body" to "field" and "pickaxe"). The default in `app/src/main/assets/dictionary.json` covers:
 
-- **Context and background**: an Orthodox priest preaching in a reverberant church, with Scripture quotations and teachings of the Church Fathers.
+- **Setting and background**: an Orthodox priest preaching in a reverberant church, with Scripture quotations and teachings of the Church Fathers.
 - **Expected words**: church spellings (`Iisus Hristos`), services, sacraments, church objects, clergy titles, feasts, saints and parables.
 - **Fixed translations**: standard English Orthodox terms (Theotokos, Great Lent, the Holy Mysteries, His Grace, Holy Pascha).
 
-Claude translation gets the context and fixed translations too, after its instructions in `app/src/main/assets/claude_translation_prompt.txt`.
+Claude translation gets the setting and fixed translations too, after its instructions in `app/src/main/assets/claude_translation_prompt.txt`.
 
 Soniox rejects a context over about 10,000 characters; the default uses about 6,800, leaving room for words added in person.
 
