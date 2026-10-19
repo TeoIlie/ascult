@@ -21,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.teoilie.ascult.ui.AscultTheme
 import com.teoilie.ascult.ui.DictionaryScreen
+import com.teoilie.ascult.ui.EntryScreen
+import com.teoilie.ascult.ui.HistoryScreen
 import com.teoilie.ascult.ui.SettingsScreen
 import com.teoilie.ascult.ui.TranslationScreen
 import com.teoilie.ascult.ui.isDark
@@ -30,6 +32,8 @@ private enum class Screen(val parent: Screen?) {
     MAIN(null),
     SETTINGS(MAIN),
     DICTIONARY(SETTINGS),
+    HISTORY(MAIN),
+    ENTRY(HISTORY),
     ;
 
     /** How many Backs lead to the main screen; deeper screens slide in from the right. */
@@ -42,6 +46,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             var screen by rememberSaveable { mutableStateOf(Screen.MAIN) }
+            var entryId by rememberSaveable { mutableStateOf("") } // the saved sermon ENTRY shows
+            val openEntry = { id: String ->
+                entryId = id
+                screen = Screen.ENTRY
+            }
 
             // Nothing is drawn until the setting loads, so a forced theme never flashes the other one.
             val theme by app.settings.theme.collectAsStateWithLifecycle(initialValue = null)
@@ -68,9 +77,15 @@ class MainActivity : ComponentActivity() {
                     label = "screen",
                 ) { shown ->
                     when (shown) {
-                        Screen.MAIN -> TranslationScreen(onOpenSettings = { screen = Screen.SETTINGS })
+                        Screen.MAIN -> TranslationScreen(
+                            onOpenSettings = { screen = Screen.SETTINGS },
+                            onOpenHistory = { screen = Screen.HISTORY },
+                            onOpenEntry = openEntry,
+                        )
                         Screen.SETTINGS -> SettingsScreen(onBack = back, onOpenDictionary = { screen = Screen.DICTIONARY })
                         Screen.DICTIONARY -> DictionaryScreen(onBack = back)
+                        Screen.HISTORY -> HistoryScreen(onBack = back, onOpenEntry = openEntry)
+                        Screen.ENTRY -> EntryScreen(entryId, onBack = back)
                     }
                 }
             }

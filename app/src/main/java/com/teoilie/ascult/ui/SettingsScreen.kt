@@ -1,13 +1,8 @@
 package com.teoilie.ascult.ui
 
-import androidx.annotation.DrawableRes
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -15,7 +10,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
@@ -27,14 +21,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.BuildConfig
@@ -72,7 +64,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: 
                 SegmentedListItem(
                     onClick = onOpenDictionary,
                     shapes = ListItemDefaults.segmentedShapes(0, 1),
-                    leadingContent = { SettingIcon(R.drawable.ic_book) },
+                    leadingContent = { TonalIcon(R.drawable.ic_book) },
                     trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
                     supportingContent = { Text("Expected words, fixed translations, setting, background\n${form.dictionarySource}") },
                 ) { Text(VOCABULARY_TITLE) }
@@ -81,20 +73,20 @@ fun SettingsScreen(onBack: () -> Unit, onOpenDictionary: () -> Unit, viewModel: 
                 SegmentedListItem(
                     onClick = { editingKey = ApiKeyField.SONIOX },
                     shapes = ListItemDefaults.segmentedShapes(0, 2),
-                    leadingContent = { SettingIcon(R.drawable.ic_key) },
+                    leadingContent = { TonalIcon(R.drawable.ic_key) },
                     supportingContent = { Text("Transcription · " + keyStatus(form.apiKey, BuildConfig.SONIOX_API_KEY)) },
                 ) { Text(ApiKeyField.SONIOX.title) }
                 SegmentedListItem(
                     onClick = { editingKey = ApiKeyField.ANTHROPIC },
                     shapes = ListItemDefaults.segmentedShapes(1, 2),
-                    leadingContent = { SettingIcon(R.drawable.ic_key) },
+                    leadingContent = { TonalIcon(R.drawable.ic_key) },
                     supportingContent = { Text("Claude translation · " + keyStatus(form.anthropicApiKey, BuildConfig.ANTHROPIC_API_KEY)) },
                 ) { Text(ApiKeyField.ANTHROPIC.title) }
             }
             SettingsGroup("About") {
                 SegmentedListItem(
                     shapes = ListItemDefaults.segmentedShapes(0, 1),
-                    leadingContent = { SettingIcon(R.drawable.ic_info) },
+                    leadingContent = { TonalIcon(R.drawable.ic_info) },
                     supportingContent = { Text("Romanian to English · Soniox $SONIOX_MODEL · Claude $CLAUDE_MODEL") },
                 ) { Text("Ascult ${BuildConfig.VERSION_NAME}") }
             }
@@ -127,23 +119,12 @@ private fun keyStatus(key: String, buildKey: String): String = when {
     else -> "Not set"
 }
 
-/** A list item's leading icon in a tonal circle. */
-@Composable
-private fun SettingIcon(@DrawableRes icon: Int) {
-    Box(
-        Modifier.size(40.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-    }
-}
-
 /** Theme row, then System / Light / Dark as a connected button group. */
 @Composable
 private fun ThemeSetting(theme: ThemeMode, onChange: (ThemeMode) -> Unit) {
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(0, 2),
-        leadingContent = { SettingIcon(R.drawable.ic_contrast) },
+        leadingContent = { TonalIcon(R.drawable.ic_contrast) },
         supportingContent = {
             Text(
                 when (theme) {

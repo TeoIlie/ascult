@@ -50,7 +50,7 @@ internal fun SaveSermonSheet(state: SessionState, onSave: (title: String) -> Uni
     val entry = state.entry ?: return
     var title by rememberSaveable(entry.id) { mutableStateOf(entry.title) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden })
-    val recordingMb = remember(state.recording, state.phase) { state.recording?.let { (it.length() + 500_000) / 1_000_000 } }
+    val recordingMb = remember(state.recording, state.phase) { state.recording?.let { megabytes(it.length()) } }
     ModalBottomSheet(
         onDismissRequest = {},
         sheetState = sheetState,

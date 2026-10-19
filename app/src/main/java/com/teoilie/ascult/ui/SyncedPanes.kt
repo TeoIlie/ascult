@@ -105,6 +105,8 @@ internal fun PaneSide.color(): Color = when (this) {
  *
  * With [showLiveCaption] in Claude mode, a dimmed caption under the English shows Soniox's latest
  * English, so there is something to read between Claude's sentences.
+ *
+ * Without [live] (a saved sermon), the panes open at the top and there is no Jump to live.
  */
 @Composable
 fun SyncedPanes(
@@ -114,9 +116,10 @@ fun SyncedPanes(
     split: Float,
     onSplitChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    live: Boolean = true,
 ) {
     val scrolls = remember { PaneSide.entries.associateWith { PaneScroll() } }
-    var followLive by remember { mutableStateOf(true) }
+    var followLive by remember { mutableStateOf(live) }
     var leader by remember { mutableStateOf<PaneScroll?>(null) } // the pane the user last dragged
 
     for (pane in scrolls.values) {
@@ -190,7 +193,7 @@ fun SyncedPanes(
             )
             PaneFor(PaneSide.ENGLISH)
         }
-        if (!followLive && segments.isNotEmpty()) {
+        if (live && !followLive && segments.isNotEmpty()) {
             FilledTonalButton(
                 onClick = { followLive = true },
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),

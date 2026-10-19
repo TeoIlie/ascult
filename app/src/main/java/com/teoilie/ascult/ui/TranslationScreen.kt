@@ -74,10 +74,16 @@ private class BarActions(
     val changeTextScale: (steps: Int) -> Unit,
     val openAudioSettings: () -> Unit,
     val openSettings: () -> Unit,
+    val openHistory: () -> Unit,
 )
 
 @Composable
-fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewModel = viewModel()) {
+fun TranslationScreen(
+    onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenEntry: (String) -> Unit,
+    viewModel: TranslationViewModel = viewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val audioSettings by viewModel.audioSettings.collectAsStateWithLifecycle()
     val textScale by viewModel.textScale.collectAsStateWithLifecycle()
@@ -97,7 +103,7 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
         viewModel.start() // reports the error itself if the microphone was denied
     }
 
-    val actions = remember(viewModel, context, permissionLauncher, onOpenSettings) {
+    val actions = remember(viewModel, context, permissionLauncher, onOpenSettings, onOpenHistory) {
         BarActions(
             start = {
                 // The microphone is required; notifications only make the session's Stop button visible.
@@ -111,6 +117,7 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
             changeTextScale = viewModel::changeTextScale,
             openAudioSettings = { showAudioSettings = true },
             openSettings = onOpenSettings,
+            openHistory = onOpenHistory,
         )
     }
 
@@ -118,7 +125,10 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
-                is SessionEvent.Saved -> snackbar.showSnackbar("Saved to History")
+                is SessionEvent.Saved -> {
+                    val result = snackbar.showSnackbar("Saved to History", actionLabel = "Open")
+                    if (result == SnackbarResult.ActionPerformed) onOpenEntry(event.entryId)
+                }
                 SessionEvent.Deleted -> {
                     val result = snackbar.showSnackbar("Sermon deleted", actionLabel = "Undo", duration = SnackbarDuration.Long)
                     if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete() else viewModel.forgetDeleted()
@@ -245,7 +255,7 @@ private fun StatusBlock(state: SessionState, audioSettings: AudioSettings, onCli
     }
 }
 
-/** Share, Audio settings and Settings. */
+/** Share, History, Audio settings and Settings. */
 @Composable
 private fun OverflowMenu(canShare: Boolean, actions: BarActions) {
     IconMenu(R.drawable.ic_more_vert, "More") { close ->
@@ -260,6 +270,7 @@ private fun OverflowMenu(canShare: Boolean, actions: BarActions) {
             },
         )
         Item("Share transcript", R.drawable.ic_share, enabled = canShare, onClick = actions.share)
+        Item("History", R.drawable.ic_history, onClick = actions.openHistory)
         Item("Audio settings", R.drawable.ic_tune, onClick = actions.openAudioSettings)
         Item("Settings", R.drawable.ic_settings, onClick = actions.openSettings)
     }
@@ -332,7 +343,7 @@ private fun TranslationContentPreview() {
             ),
         ),
     )
-    val actions = BarActions(start = {}, stop = {}, share = {}, changeTextScale = {}, openAudioSettings = {}, openSettings = {})
+    val actions = BarActions(start = {}, stop = {}, share = {}, changeTextScale = {}, openAudioSettings = {}, openSettings = {}, openHistory = {})
     AscultTheme(dark = true) {
         TranslationContent(state, AudioSettings(), textScale = 1f, paneSplit = EVEN_SPLIT, onPaneSplit = {}, actions = actions)
     }
