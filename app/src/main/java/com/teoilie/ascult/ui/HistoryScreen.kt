@@ -182,8 +182,6 @@ private fun historySummary(entries: List<HistoryEntry>): String {
     return if (bytes > 0) "$count · ${megabytes(bytes)} MB of recordings" else count
 }
 
-internal fun megabytes(bytes: Long): Long = (bytes + 500_000) / 1_000_000
-
 /**
  * [entries] (newest first) under headings: "This week" (since Monday), then each month ("October",
  * with the year when it isn't this year's).

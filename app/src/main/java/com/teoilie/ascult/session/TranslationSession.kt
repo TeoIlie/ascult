@@ -13,6 +13,7 @@ import com.teoilie.ascult.audio.recordTo
 import com.teoilie.ascult.audio.withGain
 import com.teoilie.ascult.history.HistoryEntry
 import com.teoilie.ascult.history.HistoryStore
+import com.teoilie.ascult.history.clock
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.SettingsStore
 import com.teoilie.ascult.settings.Translator
@@ -60,9 +61,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** How long to wait for Soniox to finalise the last tokens after Stop before giving up. */
 private const val FINISH_TIMEOUT_MS = 5_000L
@@ -148,6 +146,7 @@ class TranslationSession(
     suspend fun start(): Boolean {
         if (sessionJob?.isActive == true) return true
         if (_state.value.pending) return false
+        sessionJob?.join() // a deleted run may still be winding down; its cleanup must not touch this one
         val permission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
         if (permission != PackageManager.PERMISSION_GRANTED) {
             _state.update { it.copy(error = "Microphone permission is required") }
@@ -170,10 +169,10 @@ class TranslationSession(
             null
         }
         val startedAt = System.currentTimeMillis()
-        val entry = history.create(audioSettings, startedAt)
+        val entry = withContext(Dispatchers.IO) { history.create(audioSettings, startedAt) }
         history.write(entry)
         val recording = history.recordingFile(entry)
-        val label = "${audioSettings.summary} · ${SimpleDateFormat("HH:mm", Locale.US).format(Date(startedAt))}"
+        val label = "${audioSettings.summary} · ${clock(startedAt)}"
 
         stopRequested.value = false
         decision = null
@@ -369,7 +368,7 @@ class TranslationSession(
         if (!state.pending) return
         decision = Decision.Delete
         sessionJob?.cancel()
-        history.write(entry)
+        history.write(entry) // the latest text, in case it is restored by Undo
         scope.launch { history.delete(listOf(entry.id)) }
         deleted = state.copy(phase = Phase.IDLE, levelDb = SILENCE_DBFS, entry = entry)
         _state.value = SessionState()
@@ -381,8 +380,9 @@ class TranslationSession(
         val restored = deleted ?: return
         if (sessionJob?.isActive == true || _state.value.pending) return
         deleted = null
-        decision = null
         scope.launch {
+            sessionJob?.join() // the deleted run's cleanup, which must see the Delete
+            decision = null
             history.restore(listOfNotNull(restored.entry?.id))
             _state.value = restored
         }
@@ -390,9 +390,9 @@ class TranslationSession(
 
     /** The Undo for [delete] has gone: remove the run for good. */
     fun forgetDeleted() {
-        if (deleted == null) return
+        val entry = deleted?.entry ?: return
         deleted = null
-        history.emptyTrash()
+        history.forget(listOf(entry.id))
     }
 
     private sealed interface Decision {

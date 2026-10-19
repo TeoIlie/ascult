@@ -37,14 +37,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.teoilie.ascult.LOG_TAG
 import com.teoilie.ascult.R
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.Locale
 
-private const val TAG = "Ascult"
 private const val SKIP_MS = 10_000
 private val SPEEDS = listOf(1f, 1.25f, 1.5f, 0.75f)
 
@@ -54,29 +53,35 @@ private val SPEEDS = listOf(1f, 1.25f, 1.5f, 0.75f)
  */
 @Composable
 internal fun PlayerBar(file: File, enabled: Boolean, modifier: Modifier = Modifier) {
-    val player = remember(file) { MediaPlayer() }
     var duration by remember(file) { mutableIntStateOf(0) } // 0 until prepared
     var position by remember(file) { mutableIntStateOf(0) }
     var playing by remember(file) { mutableStateOf(false) }
     var speed by remember { mutableIntStateOf(0) } // index into SPEEDS
     var dragging by remember { mutableStateOf<Float?>(null) } // slider position while dragged
 
-    DisposableEffect(player) { onDispose { player.release() } }
-    LaunchedEffect(player) {
-        try {
-            withContext(Dispatchers.IO) {
-                player.setDataSource(file.path)
-                player.prepare()
-            }
-            player.setOnCompletionListener {
+    // Prepared asynchronously; the listeners run on the main thread.
+    val player = remember(file) {
+        MediaPlayer().apply {
+            setOnPreparedListener { duration = it.duration }
+            setOnCompletionListener {
                 playing = false
                 position = duration
             }
-            duration = player.duration
-        } catch (e: Exception) {
-            Log.w(TAG, "Can't play ${file.path}", e)
+            setOnErrorListener { _, what, extra ->
+                Log.w(LOG_TAG, "Can't play ${file.path}: $what/$extra")
+                playing = false
+                duration = 0 // the player is unusable now: disables the controls
+                true
+            }
+            try {
+                setDataSource(file.path)
+                prepareAsync()
+            } catch (e: IOException) {
+                Log.w(LOG_TAG, "Can't open ${file.path}", e)
+            }
         }
     }
+    DisposableEffect(player) { onDispose { player.release() } }
     LaunchedEffect(playing) {
         while (playing) {
             position = player.currentPosition

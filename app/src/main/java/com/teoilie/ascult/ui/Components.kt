@@ -55,6 +55,9 @@ fun shareFile(context: Context, title: String, file: File, mimeType: String) {
     context.startActivity(Intent.createChooser(send, title))
 }
 
+/** File sizes as shown: whole megabytes, rounded. */
+internal fun megabytes(bytes: Long): Long = (bytes + 500_000) / 1_000_000
+
 /** A list item's leading icon in a tonal circle. */
 @Composable
 internal fun TonalIcon(@DrawableRes icon: Int) {

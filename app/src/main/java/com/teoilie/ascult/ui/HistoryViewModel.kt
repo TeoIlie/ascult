@@ -42,6 +42,7 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 
     fun delete(ids: Collection<String>) {
         if (ids.isEmpty()) return
+        forgetDeleted() // only the latest delete can be undone
         viewModelScope.launch {
             history.delete(ids)
             lastDeleted = ids.toList()
@@ -57,9 +58,10 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 
     /** The Undo has gone: remove the deleted entries for good. */
     fun forgetDeleted() {
-        if (lastDeleted.isEmpty()) return
+        val ids = lastDeleted
+        if (ids.isEmpty()) return
         forgetUndo()
-        history.emptyTrash()
+        history.forget(ids)
     }
 
     private fun forgetUndo() {

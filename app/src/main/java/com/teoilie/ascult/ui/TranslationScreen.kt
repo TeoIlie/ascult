@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -122,12 +123,13 @@ fun TranslationScreen(
     }
 
     val snackbar = remember { SnackbarHostState() }
+    val openEntry by rememberUpdatedState(onOpenEntry)
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
                 is SessionEvent.Saved -> {
                     val result = snackbar.showSnackbar("Saved to History", actionLabel = "Open")
-                    if (result == SnackbarResult.ActionPerformed) onOpenEntry(event.entryId)
+                    if (result == SnackbarResult.ActionPerformed) openEntry(event.entryId)
                 }
                 SessionEvent.Deleted -> {
                     val result = snackbar.showSnackbar("Sermon deleted", actionLabel = "Undo", duration = SnackbarDuration.Long)

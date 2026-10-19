@@ -99,7 +99,8 @@ data class HistoryEntry(
 fun defaultTitle(startedAt: Long, zone: ZoneId = ZoneId.systemDefault()): String =
     DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH).format(Instant.ofEpochMilli(startedAt).atZone(zone))
 
-private fun clock(time: Long, zone: ZoneId): String =
+/** e.g. "10:15" */
+fun clock(time: Long, zone: ZoneId = ZoneId.systemDefault()): String =
     DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH).format(Instant.ofEpochMilli(time).atZone(zone))
 
 private inline fun <reified T : Enum<T>> enumOr(name: String, default: T): T =

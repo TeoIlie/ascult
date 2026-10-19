@@ -2,9 +2,8 @@ package com.teoilie.ascult.translation
 
 import android.content.Context
 import android.util.Log
+import com.teoilie.ascult.LOG_TAG
 import com.teoilie.ascult.soniox.Dictionary
-
-private const val TAG = "Ascult"
 
 /**
  * Translates a sermon piece by piece as one conversation with Claude, so each piece is translated
@@ -22,7 +21,7 @@ class ClaudeTranslator(
         val reply = client.reply(apiKey, system, turns, romanian)
         turns += Turn(romanian, reply.text)
         with(reply.usage) {
-            Log.i(TAG, "Claude turn ${turns.size}: input $input, cache read $cacheRead, cache write $cacheCreation, output $output")
+            Log.i(LOG_TAG, "Claude turn ${turns.size}: input $input, cache read $cacheRead, cache write $cacheCreation, output $output")
         }
         return reply.text
     }
