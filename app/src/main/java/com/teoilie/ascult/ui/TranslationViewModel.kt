@@ -3,12 +3,14 @@ package com.teoilie.ascult.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.teoilie.ascult.session.SessionEvent
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.session.TranslationService
 import com.teoilie.ascult.BuildConfig
 import com.teoilie.ascult.app
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.TEXT_SCALES
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -53,7 +55,16 @@ class TranslationViewModel(application: Application) : AndroidViewModel(applicat
 
     fun stop() = session.stop()
 
-    fun clear() = session.clear()
+    /** Save and Delete outcomes, for the snackbar. */
+    val events: SharedFlow<SessionEvent> = session.events
+
+    fun save(title: String) = session.save(title)
+
+    fun delete() = session.delete()
+
+    fun undoDelete() = session.undoDelete()
+
+    fun forgetDeleted() = session.forgetDeleted()
 
     fun updateAudio(transform: (AudioSettings) -> AudioSettings) {
         viewModelScope.launch { settings.updateAudio(transform) }

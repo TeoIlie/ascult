@@ -27,10 +27,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teoilie.ascult.R
 import com.teoilie.ascult.session.Phase
+import com.teoilie.ascult.session.SessionEvent
 import com.teoilie.ascult.session.SessionState
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.EVEN_SPLIT
@@ -64,7 +70,6 @@ import kotlin.math.roundToInt
 private class BarActions(
     val start: () -> Unit,
     val stop: () -> Unit,
-    val clear: () -> Unit,
     val share: () -> Unit,
     val changeTextScale: (steps: Int) -> Unit,
     val openAudioSettings: () -> Unit,
@@ -102,7 +107,6 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
                 if (missing.isEmpty()) viewModel.start() else permissionLauncher.launch(missing.toTypedArray())
             },
             stop = viewModel::stop,
-            clear = viewModel::clear,
             share = { share(context, "Ascult transcript", viewModel.state.value.segments.toPlainText()) },
             changeTextScale = viewModel::changeTextScale,
             openAudioSettings = { showAudioSettings = true },
@@ -110,7 +114,24 @@ fun TranslationScreen(onOpenSettings: () -> Unit, viewModel: TranslationViewMode
         )
     }
 
-    TranslationContent(state, audioSettings, textScale, paneSplit, viewModel::setPaneSplit, actions)
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is SessionEvent.Saved -> snackbar.showSnackbar("Saved to History")
+                SessionEvent.Deleted -> {
+                    val result = snackbar.showSnackbar("Sermon deleted", actionLabel = "Undo", duration = SnackbarDuration.Long)
+                    if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete() else viewModel.forgetDeleted()
+                }
+            }
+        }
+    }
+
+    TranslationContent(state, audioSettings, textScale, paneSplit, viewModel::setPaneSplit, actions, snackbar)
+
+    if (state.pending) {
+        SaveSermonSheet(state, onSave = viewModel::save, onDelete = viewModel::delete)
+    }
 
     if (showAudioSettings) {
         AudioSettingsSheet(
@@ -132,9 +153,11 @@ private fun TranslationContent(
     paneSplit: Float,
     onPaneSplit: (Float) -> Unit,
     actions: BarActions,
+    snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     Scaffold(
         bottomBar = { BottomBar(state, audioSettings, textScale, actions) },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         SyncedPanes(
             segments = state.segments,
@@ -166,11 +189,7 @@ private fun BottomBar(state: SessionState, audioSettings: AudioSettings, textSca
         ) {
             StatusBlock(state, audioSettings, actions.openAudioSettings, Modifier.weight(1f))
             TextSizeMenu(textScale, actions.changeTextScale)
-            OverflowMenu(
-                canShare = state.segments.isNotEmpty(),
-                canClear = !state.listening && state.segments.isNotEmpty(),
-                actions = actions,
-            )
+            OverflowMenu(canShare = state.segments.isNotEmpty(), actions = actions)
             StartStopButton(state.phase, onStart = actions.start, onStop = actions.stop, Modifier.padding(start = 6.dp))
         }
     }
@@ -226,9 +245,9 @@ private fun StatusBlock(state: SessionState, audioSettings: AudioSettings, onCli
     }
 }
 
-/** Share, Clear, Audio settings and Settings. */
+/** Share, Audio settings and Settings. */
 @Composable
-private fun OverflowMenu(canShare: Boolean, canClear: Boolean, actions: BarActions) {
+private fun OverflowMenu(canShare: Boolean, actions: BarActions) {
     IconMenu(R.drawable.ic_more_vert, "More") { close ->
         @Composable
         fun Item(label: String, @DrawableRes icon: Int, enabled: Boolean = true, onClick: () -> Unit) = DropdownMenuItem(
@@ -241,7 +260,6 @@ private fun OverflowMenu(canShare: Boolean, canClear: Boolean, actions: BarActio
             },
         )
         Item("Share transcript", R.drawable.ic_share, enabled = canShare, onClick = actions.share)
-        Item("Clear transcript", R.drawable.ic_delete, enabled = canClear, onClick = actions.clear)
         Item("Audio settings", R.drawable.ic_tune, onClick = actions.openAudioSettings)
         Item("Settings", R.drawable.ic_settings, onClick = actions.openSettings)
     }
@@ -314,7 +332,7 @@ private fun TranslationContentPreview() {
             ),
         ),
     )
-    val actions = BarActions(start = {}, stop = {}, clear = {}, share = {}, changeTextScale = {}, openAudioSettings = {}, openSettings = {})
+    val actions = BarActions(start = {}, stop = {}, share = {}, changeTextScale = {}, openAudioSettings = {}, openSettings = {})
     AscultTheme(dark = true) {
         TranslationContent(state, AudioSettings(), textScale = 1f, paneSplit = EVEN_SPLIT, onPaneSplit = {}, actions = actions)
     }

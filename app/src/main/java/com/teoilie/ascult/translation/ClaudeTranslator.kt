@@ -13,8 +13,7 @@ private const val TAG = "Ascult"
  */
 class ClaudeTranslator(
     private val client: ClaudeClient,
-    val apiKey: String,
-    val dictionary: Dictionary,
+    private val apiKey: String,
     private val system: String,
 ) {
     private val turns = mutableListOf<Turn>()

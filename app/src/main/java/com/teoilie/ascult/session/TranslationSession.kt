@@ -11,6 +11,8 @@ import com.teoilie.ascult.audio.SILENCE_DBFS
 import com.teoilie.ascult.audio.levelDbfs
 import com.teoilie.ascult.audio.recordTo
 import com.teoilie.ascult.audio.withGain
+import com.teoilie.ascult.history.HistoryEntry
+import com.teoilie.ascult.history.HistoryStore
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.SettingsStore
 import com.teoilie.ascult.settings.Translator
@@ -19,6 +21,7 @@ import com.teoilie.ascult.soniox.Dictionary
 import com.teoilie.ascult.soniox.Segment
 import com.teoilie.ascult.soniox.SonioxClient
 import com.teoilie.ascult.soniox.SonioxException
+import com.teoilie.ascult.soniox.text
 import com.teoilie.ascult.soniox.withClaudeEnglish
 import com.teoilie.ascult.soniox.withClaudeFailed
 import com.teoilie.ascult.soniox.withTokens
@@ -37,9 +40,12 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -54,6 +60,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** How long to wait for Soniox to finalise the last tokens after Stop before giving up. */
 private const val FINISH_TIMEOUT_MS = 5_000L
@@ -66,7 +75,7 @@ private const val RECONNECT_BUFFER_FRAMES = 300 // 30 s
 
 private const val MAX_RECONNECT_DELAY_MS = 10_000L
 
-/** How often the transcript is saved while listening, so little is lost if the process is killed. */
+/** How often the run's draft is saved while listening, so little is lost if the process is killed. */
 private const val AUTOSAVE_INTERVAL_MS = 15_000L
 
 enum class Phase {
@@ -81,29 +90,39 @@ enum class Phase {
 data class SessionState(
     val phase: Phase = Phase.IDLE,
     val levelDb: Float = SILENCE_DBFS,
-    /** Runs since the last Clear; the last one is the current (or most recent) session. */
+    /** The current run's text: one segment, or none before the first Start and after Save or Delete. */
     val segments: List<Segment> = emptyList(),
     val error: String? = null,
     /** A problem that doesn't stop listening, such as Claude translation retrying or giving up. */
     val notice: String? = null,
-    /** WAV file of the last session's audio, if recording was on. */
+    /** WAV file of the current run's audio, if recording was on. */
     val recording: File? = null,
+    /** The current run's History draft. */
+    val entry: HistoryEntry? = null,
+    /** The run has stopped and waits for Save or Delete; Start is not possible until then. */
+    val pending: Boolean = false,
 ) {
     val listening: Boolean get() = phase != Phase.IDLE
+}
+
+/** One-off outcomes for the screen to announce. */
+sealed interface SessionEvent {
+    data class Saved(val entryId: String) : SessionEvent
+    data object Deleted : SessionEvent
 }
 
 /**
  * Microphone → Soniox → transcripts. Lives for the whole process so it survives the screen going
  * away; TranslationService keeps the process and microphone alive while [SessionState.listening].
  */
-class TranslationSession(private val context: Context, private val settings: SettingsStore) {
+class TranslationSession(
+    private val context: Context,
+    private val settings: SettingsStore,
+    private val history: HistoryStore,
+) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val soniox = SonioxClient()
     private val claude = ClaudeClient()
-
-    /** Claude's conversation so far; kept across Start/Stop so a sermon keeps its context, until Clear. */
-    private var translator: ClaudeTranslator? = null
-    private val files = SessionFiles(context, scope)
 
     /** Kept current so gain changes apply to a running session. */
     private val audioSettings = settings.audio.stateIn(scope, SharingStarted.Eagerly, AudioSettings())
@@ -113,9 +132,22 @@ class TranslationSession(private val context: Context, private val settings: Set
     private val _state = MutableStateFlow(SessionState())
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
+    private val _events = MutableSharedFlow<SessionEvent>(extraBufferCapacity = 4)
+    val events: SharedFlow<SessionEvent> = _events.asSharedFlow()
+
+    /** What the user chose for the current run while it was still finishing; applied when it ends. */
+    private var decision: Decision? = null
+
+    /** When the microphone stopped; the run's end time. */
+    private var stoppedAt: Long? = null
+
+    /** The run last deleted from the screen, for Undo. */
+    private var deleted: SessionState? = null
+
     /** Starts listening; returns false (with [SessionState.error] set) if it cannot. */
     suspend fun start(): Boolean {
         if (sessionJob?.isActive == true) return true
+        if (_state.value.pending) return false
         val permission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
         if (permission != PackageManager.PERMISSION_GRANTED) {
             _state.update { it.copy(error = "Microphone permission is required") }
@@ -137,13 +169,18 @@ class TranslationSession(private val context: Context, private val settings: Set
         } else {
             null
         }
-        val recording = if (audioSettings.saveRecording) files.newRecording(audioSettings) else null
-        files.startTranscriptIfNeeded()
-        val label = "${audioSettings.summary} · ${timestamp("HH:mm")}"
+        val startedAt = System.currentTimeMillis()
+        val entry = history.create(audioSettings, startedAt)
+        history.write(entry)
+        val recording = history.recordingFile(entry)
+        val label = "${audioSettings.summary} · ${SimpleDateFormat("HH:mm", Locale.US).format(Date(startedAt))}"
 
         stopRequested.value = false
+        decision = null
+        stoppedAt = null
+        deleted = null
         val segment = Segment(label, claude = claudeKey?.let { ClaudeText() })
-        _state.update { SessionState(Phase.LISTENING, recording = recording, segments = it.segments + segment) }
+        _state.value = SessionState(Phase.LISTENING, recording = recording, segments = listOf(segment), entry = entry)
         sessionJob = scope.launch {
             try {
                 listen(apiKey, claudeKey, audioSettings, recording)
@@ -153,10 +190,38 @@ class TranslationSession(private val context: Context, private val settings: Set
                 _state.update { it.copy(error = e.message ?: e.toString()) }
             } finally {
                 _state.update { it.copy(phase = Phase.IDLE, levelDb = SILENCE_DBFS) }
-                files.saveTranscript(_state.value.segments)
+                if (decision != Decision.Delete) finishRun()
             }
         }
         return true
+    }
+
+    /** The current run's draft with its text so far. */
+    private fun draft(): HistoryEntry? {
+        val state = _state.value
+        val segment = state.segments.lastOrNull() ?: return null
+        return state.entry?.withText(segment, stoppedAt ?: System.currentTimeMillis())
+    }
+
+    /** Once the run has ended: saves it if Save was chosen, drops it if it has no text, else asks. */
+    private fun finishRun() {
+        val entry = draft() ?: return
+        val save = decision as? Decision.Save
+        when {
+            save != null -> {
+                history.write(entry.copy(title = save.title, saved = true))
+                _state.value = SessionState()
+                _events.tryEmit(SessionEvent.Saved(entry.id))
+            }
+            entry.romanian.isEmpty() -> {
+                history.discard(entry.id)
+                _state.value = SessionState(error = _state.value.error)
+            }
+            else -> {
+                history.write(entry)
+                _state.update { it.copy(pending = true, entry = entry) }
+            }
+        }
     }
 
     /**
@@ -190,13 +255,14 @@ class TranslationSession(private val context: Context, private val settings: Set
         val autosave = launch {
             while (true) {
                 delay(AUTOSAVE_INTERVAL_MS)
-                files.saveTranscript(_state.value.segments)
+                draft()?.let(history::write)
             }
         }
 
         val sonioxFinished = MutableStateFlow(false)
         val translation = claudeKey?.let { key ->
-            val translator = translatorFor(key, dictionary)
+            val instructions = withContext(Dispatchers.IO) { ClaudeTranslator.instructions(context) }
+            val translator = ClaudeTranslator(claude, key, systemPrompt(instructions, dictionary))
             launch { translate(translator, sonioxFinished) }
         }
 
@@ -230,16 +296,6 @@ class TranslationSession(private val context: Context, private val settings: Set
             translation.cancel()
         }
     }
-
-    /** The current conversation if it used the same key and dictionary, else a new one. */
-    private suspend fun translatorFor(apiKey: String, dictionary: Dictionary): ClaudeTranslator =
-        translator?.takeIf { it.apiKey == apiKey && it.dictionary == dictionary }
-            ?: ClaudeTranslator(
-                claude,
-                apiKey,
-                dictionary,
-                systemPrompt(withContext(Dispatchers.IO) { ClaudeTranslator.instructions(context) }, dictionary),
-            ).also { translator = it }
 
     /**
      * Sends the current segment's finished Romanian to Claude a sentence at a time (see [nextChunk]),
@@ -283,7 +339,13 @@ class TranslationSession(private val context: Context, private val settings: Set
         val job = sessionJob ?: return
         if (!job.isActive) return
         stopRequested.value = true
-        _state.update { it.copy(phase = Phase.STOPPING, levelDb = SILENCE_DBFS) }
+        val now = System.currentTimeMillis()
+        stoppedAt = now
+        // Ask straight away if there is text; Save waits for the run to finish.
+        _state.update { state ->
+            val hasText = state.segments.any { it.romanian.text().isNotEmpty() }
+            state.copy(phase = Phase.STOPPING, levelDb = SILENCE_DBFS, pending = hasText, entry = state.entry?.copy(endedAt = now))
+        }
         val translating = _state.value.segments.lastOrNull()?.claude != null
         scope.launch {
             delay(FINISH_TIMEOUT_MS + if (translating) TRANSLATION_FLUSH_TIMEOUT_MS else 0L)
@@ -291,12 +353,51 @@ class TranslationSession(private val context: Context, private val settings: Set
         }
     }
 
-    /** Forgets all text and starts a new transcript file; only between sessions. */
-    fun clear() {
-        if (sessionJob?.isActive == true) return
+    /** Keeps the run in History as [title]; if it is still finishing, once it has finished. */
+    fun save(title: String) {
+        val state = _state.value
+        if (!state.pending) return
+        decision = Decision.Save(title.trim().ifEmpty { state.entry?.title.orEmpty() })
+        _state.update { it.copy(pending = false) }
+        if (sessionJob?.isActive != true) finishRun()
+    }
+
+    /** Throws the run away (into the trash until [undoDelete] is no longer offered) and clears the screen. */
+    fun delete() {
+        val state = _state.value
+        val entry = draft() ?: return
+        if (!state.pending) return
+        decision = Decision.Delete
+        sessionJob?.cancel()
+        history.write(entry)
+        scope.launch { history.delete(listOf(entry.id)) }
+        deleted = state.copy(phase = Phase.IDLE, levelDb = SILENCE_DBFS, entry = entry)
         _state.value = SessionState()
-        translator = null
-        files.resetTranscript()
+        _events.tryEmit(SessionEvent.Deleted)
+    }
+
+    /** Brings back the run [delete] threw away, waiting for Save or Delete again. */
+    fun undoDelete() {
+        val restored = deleted ?: return
+        if (sessionJob?.isActive == true || _state.value.pending) return
+        deleted = null
+        decision = null
+        scope.launch {
+            history.restore(listOfNotNull(restored.entry?.id))
+            _state.value = restored
+        }
+    }
+
+    /** The Undo for [delete] has gone: remove the run for good. */
+    fun forgetDeleted() {
+        if (deleted == null) return
+        deleted = null
+        history.emptyTrash()
+    }
+
+    private sealed interface Decision {
+        data class Save(val title: String) : Decision
+        data object Delete : Decision
     }
 }
 

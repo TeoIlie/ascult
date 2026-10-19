@@ -75,4 +75,5 @@ fun List<Segment>.toPlainText(): String = joinToString("\n\n") { segment ->
     }
 }
 
-private fun Transcript.text() = (final + provisional).trim()
+/** All the text so far, final and provisional, without surrounding spaces. */
+internal fun Transcript.text() = (final + provisional).trim()
