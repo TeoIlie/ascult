@@ -10,7 +10,7 @@ import java.io.File
 
 class ClaudeClientTest {
     @Test
-    fun `request replays earlier turns as alternating messages, then the new Romanian, with caching on`() {
+    fun `request replays earlier turns as alternating messages, then the new Romanian in tags, with caching on`() {
         val json = requestJson("Translate.", listOf(Turn("Amin.", "Amen.")), "Doamne miluiește.")
 
         assertEquals(CLAUDE_MODEL, json.getString("model"))
@@ -18,7 +18,11 @@ class ClaudeClientTest {
         assertEquals("ephemeral", json.getJSONObject("cache_control").getString("type"))
         val messages = json.getJSONArray("messages")
         assertEquals(
-            listOf("user" to "Amin.", "assistant" to "Amen.", "user" to "Doamne miluiește."),
+            listOf(
+                "user" to "<romanian>Amin.</romanian>",
+                "assistant" to "Amen.",
+                "user" to "<romanian>Doamne miluiește.</romanian>",
+            ),
             (0 until messages.length()).map { messages.getJSONObject(it).let { m -> m.getString("role") to m.getString("content") } },
         )
     }

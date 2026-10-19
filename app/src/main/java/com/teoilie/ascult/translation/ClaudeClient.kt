@@ -79,14 +79,16 @@ class ClaudeClient(
 /**
  * The request body: [system], then the earlier turns as alternating user and assistant messages,
  * then [next]. The conversation only grows at the end, so automatic prompt caching reuses all of it.
+ * The Romanian is wrapped in `<romanian>` tags so Claude treats it as text to translate: unwrapped,
+ * a first sentence like "Is it working?" was answered instead of translated.
  */
 internal fun requestJson(system: String, turns: List<Turn>, next: String): JSONObject {
     val messages = JSONArray()
     for (turn in turns) {
-        messages.put(message("user", turn.romanian))
+        messages.put(message("user", romanian(turn.romanian)))
         messages.put(message("assistant", turn.english))
     }
-    messages.put(message("user", next))
+    messages.put(message("user", romanian(next)))
     return JSONObject()
         .put("model", CLAUDE_MODEL)
         .put("max_tokens", MAX_TOKENS)
@@ -94,6 +96,8 @@ internal fun requestJson(system: String, turns: List<Turn>, next: String): JSONO
         .put("messages", messages)
         .put("cache_control", JSONObject().put("type", "ephemeral"))
 }
+
+private fun romanian(text: String) = "<romanian>$text</romanian>"
 
 private fun message(role: String, text: String) = JSONObject().put("role", role).put("content", text)
 

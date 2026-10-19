@@ -56,7 +56,7 @@ Mic ──► AudioCapture (16 kHz mono PCM16) ──► TranslationSession ─�
 ## Claude translation
 
 - `POST https://api.anthropic.com/v1/messages` with `x-api-key` and `anthropic-version: 2023-06-01`; model `CLAUDE_MODEL` (`claude-haiku-4-5`), `max_tokens` 2048, no thinking.
-- One conversation per session until Clear (new if the key or dictionary changes): `system` is `assets/claude_translation_prompt.txt` plus the dictionary's `general` and `translation_terms` (`systemPrompt`); each turn is user = Romanian chunk, assistant = English. Only successful turns are kept, so a failed chunk is resent merged with what followed and roles keep alternating.
+- One conversation per session until Clear (new if the key or dictionary changes): `system` is `assets/claude_translation_prompt.txt` plus the dictionary's `general` and `translation_terms` (`systemPrompt`); each turn is user = Romanian chunk in `<romanian>` tags (unwrapped, Haiku answered "Is it working?" instead of translating it), assistant = English. Only successful turns are kept, so a failed chunk is resent merged with what followed and roles keep alternating.
 - Top-level `"cache_control": {"type": "ephemeral"}` caches the growing conversation (5-min TTL, refreshed by each request). Haiku 4.5 only caches prompts of 4,096+ tokens, so the first minutes of a sermon are uncached. Each request logs its usage to logcat (tag `Ascult`): check that `cache read` grows.
 - Errors: `{"error": {"type", "message"}}`; 408/429/5xx (incl. 529 overloaded) and `IOException`s are retried.
 
