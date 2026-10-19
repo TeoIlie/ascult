@@ -103,13 +103,13 @@ internal fun PaneSide.color(): Color = when (this) {
  * The [PaneDivider] between them sets [split], the Romanian share of the text height. Released near
  * either end, the handle hides that pane; [onSplitChange] gets the settled value to save.
  *
- * While [listening] in Claude mode, a dimmed caption under the English shows Soniox's latest
+ * With [showLiveCaption] in Claude mode, a dimmed caption under the English shows Soniox's latest
  * English, so there is something to read between Claude's sentences.
  */
 @Composable
 fun SyncedPanes(
     segments: List<Segment>,
-    listening: Boolean,
+    showLiveCaption: Boolean,
     textScale: Float,
     split: Float,
     onSplitChange: (Float) -> Unit,
@@ -169,7 +169,7 @@ fun SyncedPanes(
             side.share(liveSplit),
             hiding = hiding == side,
             segments,
-            caption = if (side == PaneSide.ENGLISH) liveCaption(segments, listening) else null,
+            caption = if (side == PaneSide.ENGLISH) liveCaption(segments, showLiveCaption) else null,
             scrolls.getValue(side),
             textScale,
         )
@@ -255,13 +255,14 @@ internal fun paneText(segments: List<Segment>, transcriptOf: (Segment) -> Transc
 }
 
 /**
- * Soniox's latest English while Claude translates the current segment live, trimmed to its last
- * [CAPTION_CHARS] characters at a word; null when there is no such caption to show.
+ * Soniox's latest English while Claude translates the current segment, trimmed to its last
+ * [CAPTION_CHARS] characters at a word; null unless [show] (listening, caption on) and there is
+ * such a caption.
  */
-internal fun liveCaption(segments: List<Segment>, listening: Boolean): String? {
+internal fun liveCaption(segments: List<Segment>, show: Boolean): String? {
     val segment = segments.lastOrNull() ?: return null
     val claude = segment.claude ?: return null
-    if (!listening || claude.failed) return null
+    if (!show || claude.failed) return null
     val text = (segment.english.final + segment.english.provisional).trim()
     return when {
         text.isEmpty() -> null

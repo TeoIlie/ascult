@@ -64,8 +64,9 @@ fun AudioSettingsSheet(
             }
 
             SettingsGroup("Translation") {
+                val items = if (settings.translator == Translator.CLAUDE) 3 else 2
                 SegmentedListItem(
-                    shapes = ListItemDefaults.segmentedShapes(0, 2),
+                    shapes = ListItemDefaults.segmentedShapes(0, items),
                     supportingContent = {
                         Text(
                             when {
@@ -76,10 +77,19 @@ fun AudioSettingsSheet(
                         )
                     },
                 ) { Text("English by") }
-                SegmentedListItem(shapes = ListItemDefaults.segmentedShapes(1, 2)) {
+                SegmentedListItem(shapes = ListItemDefaults.segmentedShapes(1, items)) {
                     ConnectedToggleGroup(Translator.entries, settings.translator, Translator::label) { translator ->
                         onChange { it.copy(translator = translator) }
                     }
+                }
+                if (settings.translator == Translator.CLAUDE) {
+                    SegmentedListItem(
+                        checked = settings.liveCaption,
+                        onCheckedChange = { show -> onChange { it.copy(liveCaption = show) } },
+                        shapes = ListItemDefaults.segmentedShapes(2, items),
+                        trailingContent = { Switch(checked = settings.liveCaption, onCheckedChange = null) },
+                        supportingContent = { Text("Soniox's English, dimmed under the English, while a sentence is still being spoken") },
+                    ) { Text("Live caption") }
                 }
             }
 

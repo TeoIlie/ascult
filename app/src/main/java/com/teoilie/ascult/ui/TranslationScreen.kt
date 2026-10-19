@@ -138,7 +138,7 @@ private fun TranslationContent(
     ) { padding ->
         SyncedPanes(
             segments = state.segments,
-            listening = state.listening,
+            showLiveCaption = state.listening && audioSettings.liveCaption,
             textScale = textScale,
             split = paneSplit,
             onSplitChange = onPaneSplit,

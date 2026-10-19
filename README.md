@@ -37,7 +37,7 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
   - **Gain**: 0 to +24 dB, applied immediately. It raises quiet input but does not reduce background noise.
   - **Translation**: **Soniox** (default) or **Claude**. Applies from the next Start.
     - Soniox translates as it hears, a few words at a time, so the English can read choppily.
-    - Claude translates each finished Romanian sentence as part of one conversation, so it knows the whole sermon so far. Very short sentences ("De aceea.") wait to go with the next one. Between sentences, a dimmed two-line caption under the English shows Soniox's live English. After Stop, the last sentences are translated before the session ends. If Claude fails for good (for example an invalid key), the English pane falls back to Soniox's English and listening continues. Needs an Anthropic API key.
+    - Claude translates each finished Romanian sentence as part of one conversation, so it knows the whole sermon so far. Very short sentences ("De aceea.") wait to go with the next one. Between sentences, an optional dimmed two-line caption under the English (**Live caption**, on by default) shows Soniox's live English, so you can follow a long sentence before Claude's version arrives. After Stop, the last sentences are translated before the session ends. If Claude fails for good (for example an invalid key), the English pane falls back to Soniox's English and listening continues. Needs an Anthropic API key.
   - **Save recording**: saves exactly what is sent to Soniox as a WAV named `<time>_<SOURCE>_+<gain>dB.wav`.
 - **Settings** (⋮ → Settings):
   - **Theme**: System, Light or Dark (Dark is handy in church even when the phone is light).

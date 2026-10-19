@@ -38,6 +38,8 @@ data class AudioSettings(
     val gainDb: Int = 0,
     val saveRecording: Boolean = false,
     val translator: Translator = Translator.SONIOX,
+    /** In Claude mode, show Soniox's live English under Claude's sentences while listening. */
+    val liveCaption: Boolean = true,
 ) {
     /** "Voice recognition · +12 dB" (plus " · Claude" for Claude translation), as shown in the status and segment labels. */
     val summary: String get() = "${source.label} · +$gainDb dB" + if (translator == Translator.CLAUDE) " · Claude" else ""
@@ -52,6 +54,7 @@ private val SOURCE = stringPreferencesKey("audio_source")
 private val GAIN_DB = intPreferencesKey("gain_db")
 private val SAVE_RECORDING = booleanPreferencesKey("save_recording")
 private val TRANSLATOR = stringPreferencesKey("translator")
+private val LIVE_CAPTION = booleanPreferencesKey("live_caption")
 private val API_KEY = stringPreferencesKey("soniox_api_key")
 private val ANTHROPIC_API_KEY = stringPreferencesKey("anthropic_api_key")
 private val DICTIONARY = stringPreferencesKey("dictionary_json")
@@ -115,6 +118,7 @@ class SettingsStore(context: Context) {
             prefs[GAIN_DB] = updated.gainDb.coerceIn(0, MAX_GAIN_DB)
             prefs[SAVE_RECORDING] = updated.saveRecording
             prefs[TRANSLATOR] = updated.translator.name
+            prefs[LIVE_CAPTION] = updated.liveCaption
         }
     }
 }
@@ -128,4 +132,5 @@ private fun Preferences.toAudioSettings() = AudioSettings(
     gainDb = (this[GAIN_DB] ?: 0).coerceIn(0, MAX_GAIN_DB),
     saveRecording = this[SAVE_RECORDING] ?: false,
     translator = enum(TRANSLATOR, Translator.SONIOX),
+    liveCaption = this[LIVE_CAPTION] ?: true,
 )

@@ -37,19 +37,19 @@ class PaneTextTest {
     }
 
     @Test
-    fun `live caption shows Soniox English only while Claude translates the current segment`() {
+    fun `live caption shows Soniox English only when shown and Claude translates the current segment`() {
         val live = Segment("x", english = Transcript(" The problem", " is"), claude = ClaudeText())
-        assertEquals("The problem is", liveCaption(listOf(live), listening = true))
-        assertNull(liveCaption(listOf(live), listening = false))
-        assertNull(liveCaption(listOf(live.copy(claude = ClaudeText(failed = true))), listening = true))
-        assertNull(liveCaption(listOf(live.copy(claude = null)), listening = true))
-        assertNull(liveCaption(emptyList(), listening = true))
+        assertEquals("The problem is", liveCaption(listOf(live), show = true))
+        assertNull(liveCaption(listOf(live), show = false))
+        assertNull(liveCaption(listOf(live.copy(claude = ClaudeText(failed = true))), show = true))
+        assertNull(liveCaption(listOf(live.copy(claude = null)), show = true))
+        assertNull(liveCaption(emptyList(), show = true))
     }
 
     @Test
     fun `live caption keeps the end of long text, starting at a word`() {
         val words = List(100) { "word$it" }.joinToString(" ")
-        val caption = liveCaption(listOf(Segment("x", english = Transcript(words), claude = ClaudeText())), listening = true)!!
+        val caption = liveCaption(listOf(Segment("x", english = Transcript(words), claude = ClaudeText())), show = true)!!
         assertEquals(true, caption.startsWith("…word"))
         assertEquals(true, caption.endsWith("word99"))
         assertEquals(true, caption.length <= 301)
