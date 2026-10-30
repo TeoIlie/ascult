@@ -1,11 +1,11 @@
 # Ascult
 
-A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermons from across a church. It streams the microphone to the [Soniox](https://soniox.com) real-time API and shows the Romanian transcript and a live English translation side by side. It uses a pay-as-you-go API key (roughly $0.10 an hour) instead of Soniox's ~$14/month app subscription. Optionally, Claude writes the English instead: a sentence at a time, with the whole sermon as context (roughly $0.30 more per sermon, with an Anthropic API key).
+A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermons from across a church. It streams the microphone to the [Soniox](https://soniox.com) real-time API and shows the Romanian transcript and a live English translation side by side. It uses a pay-as-you-go API key (roughly $0.10 an hour) instead of Soniox's ~$14/month app subscription. Optionally, Claude writes the English instead: a sentence at a time, with the whole sermon as context (with an Anthropic API key; with Haiku it was roughly $0.30 more per sermon, and Sonnet costs more).
 
 ## Features
 
 - Live Romanian → English: final text in full colour, still-changing text dimmed, Romanian and English panes scrolled in sync and resizable.
-- Two translators: Soniox (instant, a few words at a time) or Claude (whole sentences in formal liturgical English, a second or two after each full stop).
+- Three translators: Soniox (instant, a few words at a time), or Claude Haiku or Claude Sonnet (whole sentences in formal liturgical English, a second or two after each full stop). The app always uses the newest Haiku or Sonnet.
 - Tuned for a distant speaker: microphone source picker, software gain, live level meter, optional recording to compare settings.
 - Material 3 Expressive look in your wallpaper's colours, light or dark (or follow the phone), in Google Sans Flex.
 - Keeps listening with the screen off (foreground service with a Stop notification), and keeps the screen awake while the app is open.
@@ -35,9 +35,9 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
 - **Audio settings** (tap the status, or ⋮ → Audio settings):
   - **Microphone source**: Voice recognition (default), Unprocessed, Mic or Camcorder. Each applies different phone processing; which works best for a distant speaker has to be found by ear and by transcript quality. Applies from the next Start.
   - **Gain**: 0 to +24 dB, applied immediately. It raises quiet input but does not reduce background noise.
-  - **Translation**: **Soniox** (default) or **Claude**. Applies from the next Start.
+  - **Translation**: **Soniox** (default), **Haiku** or **Sonnet**. Applies from the next Start.
     - Soniox translates as it hears, a few words at a time, so the English can read choppily.
-    - Claude translates each finished Romanian sentence as part of one conversation, so it knows the whole sermon so far. Very short sentences ("De aceea.") wait to go with the next one. Between sentences, an optional dimmed two-line caption under the English (**Live caption**, on by default) shows Soniox's live English, so you can follow a long sentence before Claude's version arrives. After Stop, the last sentences are translated before the session ends. If Claude fails for good (for example an invalid key), the English pane falls back to Soniox's English and listening continues. Needs an Anthropic API key.
+    - Haiku and Sonnet are Claude models; Sonnet is more careful but slower and pricier. At each Start the app asks Anthropic for the newest model of the chosen kind, so new models are picked up without an app update; the sermon's details in History name the model that translated it. Claude translates each finished Romanian sentence as part of one conversation, so it knows the whole sermon so far. Very short sentences ("De aceea.") wait to go with the next one. Between sentences, an optional dimmed two-line caption under the English (**Live caption**, on by default) shows Soniox's live English, so you can follow a long sentence before Claude's version arrives. After Stop, the last sentences are translated before the session ends. If Claude fails for good (for example an invalid key), the English pane falls back to Soniox's English and listening continues. Needs an Anthropic API key.
   - **Save recording**: keeps exactly what is sent to Soniox with the sermon. Saved recordings are compressed to AAC (about 14 MB an hour instead of 115 MB for the WAV).
 - **Settings** (⋮ → Settings):
   - **Theme**: System, Light or Dark (Dark is handy in church even when the phone is light).
