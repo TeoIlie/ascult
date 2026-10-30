@@ -49,11 +49,11 @@ data class HistoryEntry(
     /** Rounded to whole minutes, at least one. */
     val minutes: Long get() = ((endedAt - startedAt) / 60_000.0).roundToLong().coerceAtLeast(1)
 
-    /** e.g. "10:15–10:57 · Voice recognition · +12 dB · Claude" */
+    /** e.g. "10:15–10:57 · Voice recognition · +12 dB · Claude Sonnet 5" (the model, if Claude translated) */
     fun details(zone: ZoneId = ZoneId.systemDefault()): String =
-        "${clock(startedAt, zone)}–${clock(endedAt, zone)} · ${source.label} · +$gainDb dB · ${translator.label}"
+        "${clock(startedAt, zone)}–${clock(endedAt, zone)} · ${source.label} · +$gainDb dB · ${claude?.model ?: translator.label}"
 
-    /** e.g. "10:15 · 42 min · Claude" */
+    /** e.g. "10:15 · 42 min · Sonnet" */
     fun summary(zone: ZoneId = ZoneId.systemDefault()): String = "${clock(startedAt, zone)} · $minutes min · ${translator.label}"
 
     /** The English to show: Claude's unless it gave up, else Soniox's. */
@@ -69,7 +69,11 @@ data class HistoryEntry(
         .put("translator", translator.name)
         .put("romanian", romanian)
         .put("english", english)
-        .put("claude", claude?.let { JSONObject().put("english", it.english).put("failed", it.failed) } ?: JSONObject.NULL)
+        .put(
+            "claude",
+            claude?.let { JSONObject().put("english", it.english).put("failed", it.failed).put("model", it.model ?: JSONObject.NULL) }
+                ?: JSONObject.NULL,
+        )
         .put("audio", audio ?: JSONObject.NULL)
 
     companion object {
@@ -83,11 +87,16 @@ data class HistoryEntry(
                 endedAt = json.getLong("endedAt"),
                 source = enumOr(json.optString("source"), MicSource.VOICE_RECOGNITION),
                 gainDb = json.optInt("gainDb"),
-                translator = enumOr(json.optString("translator"), Translator.SONIOX),
+                translator = Translator.fromName(json.optString("translator")),
                 romanian = romanian,
                 english = json.optString("english"),
                 claude = json.optJSONObject("claude")?.let {
-                    ClaudeText(it.optString("english"), translatedUpTo = romanian.length, failed = it.optBoolean("failed"))
+                    ClaudeText(
+                        it.optString("english"),
+                        translatedUpTo = romanian.length,
+                        failed = it.optBoolean("failed"),
+                        model = if (it.isNull("model")) null else it.optString("model"),
+                    )
                 },
                 audio = if (json.isNull("audio")) null else json.optString("audio"),
             )

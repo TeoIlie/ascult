@@ -25,8 +25,8 @@ class StatusTextTest {
     @Test
     fun `Claude translation is part of the settings summary`() {
         assertEquals(
-            StatusText("Ready", "$settings · Claude"),
-            statusText(SessionState(), audio.copy(translator = Translator.CLAUDE)),
+            StatusText("Ready", "$settings · Sonnet"),
+            statusText(SessionState(), audio.copy(translator = Translator.SONNET)),
         )
     }
 

@@ -64,15 +64,16 @@ fun AudioSettingsSheet(
             }
 
             SettingsGroup("Translation") {
-                val items = if (settings.translator == Translator.CLAUDE) 3 else 2
+                val items = if (settings.translator.usesClaude) 3 else 2
                 SegmentedListItem(
                     shapes = ListItemDefaults.segmentedShapes(0, items),
                     supportingContent = {
                         Text(
                             when {
-                                settings.translator == Translator.SONIOX -> "Live from Soniox, a few words at a time"
-                                claudeKeySet -> "Each finished sentence, with the whole sermon as context"
-                                else -> "Add an Anthropic API key in Settings"
+                                !settings.translator.usesClaude -> "Live from Soniox, a few words at a time"
+                                !claudeKeySet -> "Add an Anthropic API key in Settings"
+                                settings.translator == Translator.SONNET -> "Claude Sonnet: more careful, a little slower and pricier than Haiku"
+                                else -> "Claude Haiku: each finished sentence, with the whole sermon as context"
                             },
                         )
                     },
@@ -82,7 +83,7 @@ fun AudioSettingsSheet(
                         onChange { it.copy(translator = translator) }
                     }
                 }
-                if (settings.translator == Translator.CLAUDE) {
+                if (settings.translator.usesClaude) {
                     SegmentedListItem(
                         checked = settings.liveCaption,
                         onCheckedChange = { show -> onChange { it.copy(liveCaption = show) } },

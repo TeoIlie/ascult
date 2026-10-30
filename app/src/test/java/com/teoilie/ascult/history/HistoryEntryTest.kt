@@ -23,10 +23,10 @@ class HistoryEntryTest {
         endedAt = start + 42 * 60_000L + 20_000L,
         source = MicSource.CAMCORDER,
         gainDb = 12,
-        translator = Translator.CLAUDE,
+        translator = Translator.SONNET,
         romanian = "Bună ziua.",
         english = "Good day.",
-        claude = ClaudeText("Good afternoon.", translatedUpTo = 10, failed = false),
+        claude = ClaudeText("Good afternoon.", translatedUpTo = 10, failed = false, model = "Claude Sonnet 5"),
         audio = "audio.m4a",
         saved = true,
     )
@@ -54,6 +54,16 @@ class HistoryEntryTest {
     }
 
     @Test
+    fun `entries from before the model choice read as Haiku, without a model name`() {
+        val json = entry.toJson().put("translator", "CLAUDE")
+        json.getJSONObject("claude").remove("model")
+        val read = HistoryEntry.fromJson(entry.id, json)
+        assertEquals(Translator.HAIKU, read.translator)
+        assertNull(read.claude?.model)
+        assertEquals("10:15–10:57 · Camcorder · +12 dB · Haiku", read.details(utc))
+    }
+
+    @Test
     fun `withText keeps final and provisional text and the end time`() {
         val segment = Segment(
             "label",
@@ -71,8 +81,8 @@ class HistoryEntryTest {
     @Test
     fun `labels`() {
         assertEquals("Sunday 18 Oct", defaultTitle(start, utc))
-        assertEquals("10:15–10:57 · Camcorder · +12 dB · Claude", entry.details(utc))
-        assertEquals("10:15 · 42 min · Claude", entry.summary(utc))
+        assertEquals("10:15–10:57 · Camcorder · +12 dB · Claude Sonnet 5", entry.details(utc))
+        assertEquals("10:15 · 42 min · Sonnet", entry.summary(utc))
         assertEquals(1, entry.copy(endedAt = start + 5_000).minutes)
     }
 

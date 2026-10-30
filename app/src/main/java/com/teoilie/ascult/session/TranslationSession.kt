@@ -16,7 +16,6 @@ import com.teoilie.ascult.history.HistoryStore
 import com.teoilie.ascult.history.clock
 import com.teoilie.ascult.settings.AudioSettings
 import com.teoilie.ascult.settings.SettingsStore
-import com.teoilie.ascult.settings.Translator
 import com.teoilie.ascult.soniox.ClaudeText
 import com.teoilie.ascult.soniox.Dictionary
 import com.teoilie.ascult.soniox.Segment
@@ -160,7 +159,7 @@ class TranslationSession(
 
         // Source, recording and translator are fixed for the session; gain is read per frame so it can be adjusted live.
         val audioSettings = settings.audio.first()
-        val claudeKey = if (audioSettings.translator == Translator.CLAUDE) {
+        val claudeKey = if (audioSettings.translator.usesClaude) {
             settings.anthropicApiKey.first().ifBlank { BuildConfig.ANTHROPIC_API_KEY }.ifBlank {
                 _state.update { it.copy(error = "No Anthropic API key: add one in Settings") }
                 return false
@@ -261,7 +260,8 @@ class TranslationSession(
         val sonioxFinished = MutableStateFlow(false)
         val translation = claudeKey?.let { key ->
             val instructions = withContext(Dispatchers.IO) { ClaudeTranslator.instructions(context) }
-            val translator = ClaudeTranslator(claude, key, systemPrompt(instructions, dictionary))
+            val family = checkNotNull(audioSettings.translator.family)
+            val translator = ClaudeTranslator(claude, key, systemPrompt(instructions, dictionary), family)
             launch { translate(translator, sonioxFinished) }
         }
 
@@ -316,9 +316,11 @@ class TranslationSession(
                 continue
             }
             try {
-                val english = translator.translate(chunk.text)
+                val translation = translator.translate(chunk.text)
                 attempt = 0
-                _state.update { it.copy(notice = null, segments = it.segments.withClaudeEnglish(english, chunk.end)) }
+                _state.update {
+                    it.copy(notice = null, segments = it.segments.withClaudeEnglish(translation.english, chunk.end, translation.model))
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 if (!e.isRetryable()) {

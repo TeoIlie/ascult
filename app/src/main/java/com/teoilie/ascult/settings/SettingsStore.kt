@@ -22,8 +22,24 @@ enum class MicSource(val label: String, val description: String, val audioSource
     CAMCORDER("Camcorder", "Video-recording processing, may use another mic", MediaRecorder.AudioSource.CAMCORDER),
 }
 
-/** Who writes the English: Soniox alongside the Romanian, or Claude from each finished Romanian sentence. */
-enum class Translator(val label: String) { SONIOX("Soniox"), CLAUDE("Claude") }
+/**
+ * Who writes the English: Soniox alongside the Romanian, or Claude from each finished Romanian sentence.
+ * [family] is the Claude model family; the newest model in it is looked up at each Start.
+ */
+enum class Translator(val label: String, val family: String?) {
+    SONIOX("Soniox", null),
+    HAIKU("Haiku", "haiku"),
+    SONNET("Sonnet", "sonnet"),
+    ;
+
+    val usesClaude: Boolean get() = family != null
+
+    companion object {
+        /** The translator stored as [name], reading the former single "CLAUDE" choice as [HAIKU]. */
+        fun fromName(name: String?, default: Translator = SONIOX): Translator =
+            if (name == "CLAUDE") HAIKU else entries.find { it.name == name } ?: default
+    }
+}
 
 /** App colours: follow the phone's dark theme setting, or force one. */
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
@@ -41,8 +57,8 @@ data class AudioSettings(
     /** In Claude mode, show Soniox's live English under Claude's sentences while listening. */
     val liveCaption: Boolean = true,
 ) {
-    /** "Voice recognition · +12 dB" (plus " · Claude" for Claude translation), as shown in the status and segment labels. */
-    val summary: String get() = "${source.label} · +$gainDb dB" + if (translator == Translator.CLAUDE) " · Claude" else ""
+    /** "Voice recognition · +12 dB" (plus " · Sonnet" for Claude translation), as shown in the status and segment labels. */
+    val summary: String get() = "${source.label} · +$gainDb dB" + if (translator.usesClaude) " · ${translator.label}" else ""
 }
 
 /** Pane split that gives Romanian and English the same height. */
@@ -131,6 +147,6 @@ private fun Preferences.toAudioSettings() = AudioSettings(
     source = enum(SOURCE, MicSource.VOICE_RECOGNITION),
     gainDb = (this[GAIN_DB] ?: 0).coerceIn(0, MAX_GAIN_DB),
     saveRecording = this[SAVE_RECORDING] ?: false,
-    translator = enum(TRANSLATOR, Translator.SONIOX),
+    translator = Translator.fromName(this[TRANSLATOR]),
     liveCaption = this[LIVE_CAPTION] ?: true,
 )

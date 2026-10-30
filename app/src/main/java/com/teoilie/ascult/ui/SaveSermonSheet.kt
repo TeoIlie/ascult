@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import com.teoilie.ascult.R
 import com.teoilie.ascult.session.Phase
 import com.teoilie.ascult.session.SessionState
-import com.teoilie.ascult.settings.Translator
 
 /**
  * Asked after every Stop: keep the run in History (under a name) or throw it away. It can't be
@@ -71,7 +70,7 @@ internal fun SaveSermonSheet(state: SessionState, onSave: (title: String) -> Uni
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 InfoChip(R.drawable.ic_schedule, "${entry.minutes} min")
-                InfoChip(null, if (entry.translator == Translator.CLAUDE) "Claude translation" else "Soniox translation")
+                InfoChip(null, if (entry.translator.usesClaude) "Claude ${entry.translator.label} translation" else "Soniox translation")
                 if (recordingMb != null) InfoChip(R.drawable.ic_graphic_eq, "Recording · $recordingMb MB")
             }
             if (state.phase == Phase.STOPPING) {
