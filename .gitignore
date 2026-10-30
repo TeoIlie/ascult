@@ -10,4 +10,5 @@ tools/data/
 build/
 local.properties
 .idea/
+.vscode/
 *.iml
