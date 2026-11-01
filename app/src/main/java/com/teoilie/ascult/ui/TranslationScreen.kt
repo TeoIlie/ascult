@@ -174,6 +174,7 @@ private fun TranslationContent(
         SyncedPanes(
             segments = state.segments,
             showLiveCaption = state.listening && audioSettings.liveCaption,
+            markNewest = state.listening,
             textScale = textScale,
             split = paneSplit,
             onSplitChange = onPaneSplit,

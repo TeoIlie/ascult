@@ -87,12 +87,34 @@ internal enum class PaneSide(
 
     /** This pane's share of the text height for a given split (the Romanian share). */
     fun share(split: Float): Float = if (this == ROMANIAN) split else 1f - split
+
+    /**
+     * Claude's newest reply (or the Romanian it translated) as a range of this pane's final text;
+     * null unless Claude is translating [segment].
+     */
+    fun newest(segment: Segment): IntRange? {
+        val claude = segment.claude?.takeUnless { it.failed } ?: return null
+        return when (this) {
+            ROMANIAN -> claude.newestRomanianFrom until claude.translatedUpTo
+            ENGLISH -> claude.newestFrom until claude.english.length
+        }
+    }
 }
 
 @Composable
 internal fun PaneSide.color(): Color = when (this) {
     PaneSide.ROMANIAN -> MaterialTheme.colorScheme.primary
     PaneSide.ENGLISH -> MaterialTheme.colorScheme.tertiary
+}
+
+/** The highlight for Claude's newest reply: the pane's container colour, strong whatever the wallpaper. */
+@Composable
+internal fun PaneSide.highlight(): SpanStyle {
+    val colors = MaterialTheme.colorScheme
+    return when (this) {
+        PaneSide.ROMANIAN -> SpanStyle(color = colors.onPrimaryContainer, background = colors.primaryContainer)
+        PaneSide.ENGLISH -> SpanStyle(color = colors.onTertiaryContainer, background = colors.tertiaryContainer)
+    }
 }
 
 /**
@@ -104,7 +126,8 @@ internal fun PaneSide.color(): Color = when (this) {
  * either end, the handle hides that pane; [onSplitChange] gets the settled value to save.
  *
  * With [showLiveCaption] in Claude mode, a dimmed caption under the English shows Soniox's latest
- * English, so there is something to read between Claude's sentences.
+ * English, so there is something to read between Claude's sentences. With [markNewest] in Claude mode,
+ * Claude's newest reply (and the Romanian it translated) is highlighted.
  *
  * Without [live] (a saved sermon), the panes open at the top and there is no Jump to live.
  */
@@ -117,6 +140,7 @@ fun SyncedPanes(
     onSplitChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     live: Boolean = true,
+    markNewest: Boolean = false,
 ) {
     val scrolls = remember { PaneSide.entries.associateWith { PaneScroll() } }
     var followLive by remember { mutableStateOf(live) }
@@ -173,6 +197,7 @@ fun SyncedPanes(
             hiding = hiding == side,
             segments,
             caption = if (side == PaneSide.ENGLISH) liveCaption(segments, showLiveCaption) else null,
+            markNewest,
             scrolls.getValue(side),
             textScale,
         )
@@ -239,8 +264,17 @@ internal class PaneLayout(private val segmentTops: List<Float> = emptyList(), pr
 /** A pane's text and the offset where each segment starts. */
 internal class PaneText(val text: AnnotatedString, val segmentStarts: List<Int>)
 
-/** Segments as paragraphs, text only; final text plain, provisional text in [provisionalStyle]. */
-internal fun paneText(segments: List<Segment>, transcriptOf: (Segment) -> Transcript, provisionalStyle: SpanStyle): PaneText {
+/**
+ * Segments as paragraphs, text only; final text plain, provisional text in [provisionalStyle]. The
+ * last segment's [newest] range of its final text, without surrounding spaces, is in [newestStyle].
+ */
+internal fun paneText(
+    segments: List<Segment>,
+    transcriptOf: (Segment) -> Transcript,
+    provisionalStyle: SpanStyle,
+    newest: (Segment) -> IntRange? = { null },
+    newestStyle: SpanStyle = SpanStyle(),
+): PaneText {
     val segmentStarts = mutableListOf<Int>()
     val text = buildAnnotatedString {
         segments.forEachIndexed { i, segment ->
@@ -248,6 +282,17 @@ internal fun paneText(segments: List<Segment>, transcriptOf: (Segment) -> Transc
             segmentStarts += length
             val transcript = transcriptOf(segment)
             val final = transcript.final.trimStart()
+            if (i == segments.lastIndex) {
+                newest(segment)?.let { range ->
+                    // Offsets count the leading space that trimStart() dropped.
+                    val trimmed = transcript.final.length - final.length
+                    var start = (range.first - trimmed).coerceIn(0, final.length)
+                    var end = (range.last + 1 - trimmed).coerceIn(0, final.length)
+                    while (start < end && final[start].isWhitespace()) start++
+                    while (end > start && final[end - 1].isWhitespace()) end--
+                    if (end > start) addStyle(newestStyle, length + start, length + end)
+                }
+            }
             append(final)
             withStyle(provisionalStyle) {
                 append(if (final.isEmpty()) transcript.provisional.trimStart() else transcript.provisional)
@@ -286,6 +331,7 @@ private fun ColumnScope.Pane(
     hiding: Boolean,
     segments: List<Segment>,
     caption: String?,
+    markNewest: Boolean,
     pane: PaneScroll,
     textScale: Float,
 ) {
@@ -308,8 +354,11 @@ private fun ColumnScope.Pane(
                 }
                 val provisionalColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                 val provisional = SpanStyle(color = provisionalColor)
+                val newest = side.highlight()
                 // Rebuilt only when the text changes, not on every frame of a divider drag.
-                val content = remember(segments, side, provisional) { paneText(segments, side.transcriptOf, provisional) }
+                val content = remember(segments, side, provisional, markNewest, newest) {
+                    paneText(segments, side.transcriptOf, provisional, if (markNewest) side::newest else { _ -> null }, newest)
+                }
                 val topFade = rememberEdgeFade { pane.scroll.canScrollBackward }
                 val bottomFade = rememberEdgeFade { pane.scroll.canScrollForward }
                 Column(Modifier.fillMaxSize()) {

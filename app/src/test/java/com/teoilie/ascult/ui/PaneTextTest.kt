@@ -11,6 +11,7 @@ import org.junit.Test
 
 class PaneTextTest {
     private val provisional = SpanStyle(color = Color.Gray)
+    private val newest = SpanStyle(color = Color.Blue)
     private val segments = listOf(
         Segment(label = "Mic · +0 dB · 19:00", romanian = Transcript(" Bună ziua.", "")),
         Segment(label = "Mic · +6 dB · 19:30", romanian = Transcript("Iubiți credincioși,", " astăzi")),
@@ -54,4 +55,61 @@ class PaneTextTest {
         assertEquals(true, caption.endsWith("word99"))
         assertEquals(true, caption.length <= 301)
     }
+
+    @Test
+    fun `Claude's newest English reply is highlighted`() {
+        val segment = Segment("x", claude = ClaudeText("Amen. Lord, have mercy.", newestFrom = "Amen. ".length))
+        assertEquals(listOf("Lord, have mercy."), highlighted(listOf(segment), PaneSide.ENGLISH))
+    }
+
+    @Test
+    fun `only the Romanian of the newest reply is highlighted, without the space before it`() {
+        val segment = Segment(
+            "x",
+            romanian = Transcript(" Amin. Doamne miluiește. Bine", " ați venit"),
+            claude = ClaudeText("Amen. Lord, have mercy.", translatedUpTo = 24, newestRomanianFrom = 6),
+        )
+        val pane = paneText(listOf(segment), Segment::romanian, provisional, PaneSide.ROMANIAN::newest, newest)
+        assertEquals("Amin. Doamne miluiește. Bine ați venit", pane.text.text)
+        assertEquals(listOf("Doamne miluiește."), pane.styled(newest))
+        assertEquals(listOf(" ați venit"), pane.styled(provisional))
+    }
+
+    @Test
+    fun `Claude's first reply is all highlighted`() {
+        assertEquals(listOf("Amen."), highlighted(listOf(Segment("x", claude = ClaudeText("Amen."))), PaneSide.ENGLISH))
+    }
+
+    @Test
+    fun `only the last segment's newest reply counts`() {
+        val earlier = Segment("a", claude = ClaudeText("Old one. Old two.", newestFrom = 9))
+        val current = Segment("b", claude = ClaudeText("New one. New two.", newestFrom = 9))
+        assertEquals(listOf("New two."), highlighted(listOf(earlier, current), PaneSide.ENGLISH))
+    }
+
+    @Test
+    fun `nothing is highlighted without Claude or after it fails`() {
+        val romanian = Transcript("Amin. Doamne miluiește.")
+        val claude = ClaudeText("Amen. Lord, have mercy.", translatedUpTo = 23, newestFrom = 6, newestRomanianFrom = 5)
+        for (segment in listOf(Segment("x", romanian), Segment("x", romanian, claude = claude.copy(failed = true)))) {
+            for (side in PaneSide.entries) assertEquals(emptyList<String>(), highlighted(listOf(segment), side))
+        }
+    }
+
+    @Test
+    fun `an empty reply highlights nothing`() {
+        assertEquals(emptyList<String>(), highlighted(listOf(Segment("x", claude = ClaudeText("Amen. ", newestFrom = 6))), PaneSide.ENGLISH))
+    }
+
+    @Test
+    fun `a range past the text is clamped`() {
+        val segment = Segment("x", romanian = Transcript("Amin."), claude = ClaudeText(translatedUpTo = 99, newestRomanianFrom = 3))
+        assertEquals(listOf("n."), highlighted(listOf(segment), PaneSide.ROMANIAN))
+    }
+
+    private fun highlighted(segments: List<Segment>, side: PaneSide) =
+        paneText(segments, side.transcriptOf, provisional, side::newest, newest).styled(newest)
+
+    private fun PaneText.styled(style: SpanStyle) =
+        text.spanStyles.filter { it.item == style && it.start < it.end }.map { text.text.substring(it.start, it.end) }
 }

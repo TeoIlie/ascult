@@ -50,7 +50,10 @@ class TranscriptTest {
         val translated = segments.withClaudeEnglish("Amen.", upTo = 5).withClaudeEnglish("Lord, have mercy.", upTo = 23)
 
         assertEquals(earlier, translated[0])
-        assertEquals(ClaudeText("Amen. Lord, have mercy.", translatedUpTo = 23), translated[1].claude)
+        assertEquals(
+            ClaudeText("Amen. Lord, have mercy.", translatedUpTo = 23, newestFrom = "Amen. ".length, newestRomanianFrom = 5),
+            translated[1].claude,
+        )
         assertEquals(Transcript("Amen. Lord, have mercy."), translated[1].shownEnglish)
         assertEquals(current.english, translated.withClaudeFailed()[1].shownEnglish)
         assertEquals(earlier.english, earlier.shownEnglish)
