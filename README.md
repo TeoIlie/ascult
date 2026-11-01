@@ -17,7 +17,7 @@ A personal Android app (Pixel, GrapheneOS) for following Romanian Orthodox sermo
 ## Setup
 
 1. Android Studio (or the Android SDK) with platform 37, and a phone on Android 14+ with USB debugging enabled.
-2. Optional for debug builds: put your API keys in a gitignored `.env` at the repo root. Debug builds use them when no key is entered in the app; release builds never contain them. The Anthropic key is only needed for Claude translation.
+2. Optional: put your API keys in a gitignored `.env` at the repo root. Debug and release builds include them and use them when no key is entered in the app, so don't share the APK. The Anthropic key is only needed for Claude translation.
 
    ```bash
    echo "SONIOX_API_KEY=<your key>" > .env

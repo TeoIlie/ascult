@@ -19,21 +19,17 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0"
+        // Personal sideloaded app: bake the API keys from the gitignored .env into every build, as
+        // fallbacks for keys not set in Settings. Don't share the APK: anyone with it can read them.
+        buildConfigField("String", "SONIOX_API_KEY", "\"${envFileValue("SONIOX_API_KEY")}\"")
+        buildConfigField("String", "ANTHROPIC_API_KEY", "\"${envFileValue("ANTHROPIC_API_KEY")}\"")
     }
 
     buildTypes {
-        debug {
-            // Dev convenience: bake the API keys from the gitignored .env into debug builds only, as
-            // fallbacks for keys not set in Settings. Release builds never contain them.
-            buildConfigField("String", "SONIOX_API_KEY", "\"${envFileValue("SONIOX_API_KEY")}\"")
-            buildConfigField("String", "ANTHROPIC_API_KEY", "\"${envFileValue("ANTHROPIC_API_KEY")}\"")
-        }
         release {
             isMinifyEnabled = false
             // Personal sideloaded app: sign release builds with the debug key.
             signingConfig = signingConfigs.getByName("debug")
-            buildConfigField("String", "SONIOX_API_KEY", "\"\"")
-            buildConfigField("String", "ANTHROPIC_API_KEY", "\"\"")
         }
     }
 
